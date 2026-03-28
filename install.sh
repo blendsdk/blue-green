@@ -60,4 +60,4 @@ fi
 echo "🚀 Running scaffold generator..."
 echo ""
 
-node "$SCAFFOLD_DIR/scaffold/scaffold.js" "$@"
+node "$SCAFFOLD_DIR/scaffold/scaffold.js" "$@" < /dev/tty
