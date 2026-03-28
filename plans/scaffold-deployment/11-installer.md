@@ -11,13 +11,13 @@
 
 ```bash
 # Interactive:
-curl -fsSL https://raw.githubusercontent.com/TrueSoftwareNL/blue-green-template/master/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/blendsdk/blue-green/master/install.sh | bash
 
 # With flags (non-interactive):
 curl -fsSL .../install.sh | bash -s -- --name myapp --port 8080
 
 # Pinned version:
-curl -fsSL https://raw.githubusercontent.com/TrueSoftwareNL/blue-green-template/v1.0.0/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/blendsdk/blue-green/v1.0.0/install.sh | bash
 ```
 
 ## Flow

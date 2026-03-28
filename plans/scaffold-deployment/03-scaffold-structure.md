@@ -3,10 +3,10 @@
 > **Document**: 03-scaffold-structure.md
 > **Parent**: [Index](00-index.md)
 
-## Repository Layout (blue-green-template)
+## Repository Layout (blue-green)
 
 ```
-blue-green-template/
+blue-green/
 ├── install.sh                       ← Curl entry point (thin bash wrapper)
 ├── scaffold/
 │   ├── scaffold.js                  ← Node.js interactive generator (zero deps)

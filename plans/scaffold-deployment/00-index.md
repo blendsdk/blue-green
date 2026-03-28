@@ -6,7 +6,7 @@
 
 ## Overview
 
-Transform the `blue-green-template` repository into a **scaffold source** that can be installed into any BlendSDK application via a single `curl | bash` command. The scaffold generates a complete deployment infrastructure including:
+Transform the `blue-green` repository into a **scaffold source** that can be installed into any BlendSDK application via a single `curl | bash` command. The scaffold generates a complete deployment infrastructure including:
 
 - **Zero-downtime blue-green deployments** via Docker Compose profiles + Nginx upstream switching
 - **GitHub Actions CI/CD** pipelines (build-test, release with blue-green deploy, operations panel)
@@ -44,7 +44,7 @@ On server:
 |----|----------|-------------|
 | 00 | [Index](00-index.md) | This document — overview and navigation |
 | 01 | [Requirements](01-requirements.md) | Requirements, scope, topology matrix |
-| 02 | [Current State](02-current-state.md) | Current blue-green-template + LogixControl analysis |
+| 02 | [Current State](02-current-state.md) | Current blue-green + LogixControl analysis |
 | 03 | [Scaffold Structure](03-scaffold-structure.md) | Directory layout, template placeholder system |
 | 04 | [Deployment Infra](04-deployment-infra.md) | docker-compose, Dockerfile, .env, nginx, pg-backup, dozzle |
 | 05 | [Remote Ops](05-remote-ops.md) | remote-ops.sh: blue-green deploy + operations + health-check-all |
@@ -81,7 +81,7 @@ On server:
   - `.github/workflows/release.yml` — SSH deployment pipeline
   - `.github/workflows/operations.yml` — operations panel
   - `docker/pg-backup.sh` — backup sidecar pattern
-- **Blue-green-template** (this repo):
+- **Blue-green** (this repo):
   - `scripts/switch-environment.sh` — 11-step blue-green switcher
   - `nginx/` — modular security-hardened config
   - `docker-compose.yml` — profile-based blue/green services

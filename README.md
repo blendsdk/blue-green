@@ -1,6 +1,6 @@
 # Blue-Green Deployment Template
 
-A production-ready **blue-green deployment** infrastructure template for [BlendSDK](https://github.com/AgeOfLearning/blendsdk)/WebAFX applications. Provides zero-downtime deployments via Docker Compose, Nginx, GitHub Actions CI/CD, and declarative config management.
+A production-ready **blue-green deployment** infrastructure template for `BlendSDK` applications. Provides zero-downtime deployments via Docker Compose, Nginx, GitHub Actions CI/CD, and declarative config management.
 
 Designed to operate behind [ProxyBuilder](https://github.com/TrueSoftwareNL/nginx-proxy) — an external reverse proxy that handles SSL termination.
 
@@ -10,14 +10,14 @@ Add complete deployment infrastructure to your project with a single command:
 
 ```bash
 # Interactive mode — answers questions about your project
-curl -fsSL https://raw.githubusercontent.com/TrueSoftwareNL/blue-green-template/master/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/blendsdk/blue-green/master/install.sh | bash
 
 # Non-interactive mode — provide all answers via flags
-curl -fsSL https://raw.githubusercontent.com/TrueSoftwareNL/blue-green-template/master/install.sh | bash -s -- \
+curl -fsSL https://raw.githubusercontent.com/blendsdk/blue-green/master/install.sh | bash -s -- \
   --name my-app --port 3000 --with-postgres --single
 
 # Pin to a specific version
-BG_VERSION=v1.0.0 curl -fsSL https://raw.githubusercontent.com/TrueSoftwareNL/blue-green-template/v1.0.0/install.sh | bash
+BG_VERSION=v1.0.0 curl -fsSL https://raw.githubusercontent.com/blendsdk/blue-green/v1.0.0/install.sh | bash
 ```
 
 ### Scaffold Flags

@@ -6,7 +6,7 @@
 ## 1. Current File Structure
 
 ```
-blue-green-template/
+blue-green/
 ├── .env                              # Environment configuration
 ├── docker-compose.yml                # Service definitions
 ├── app/

@@ -9,7 +9,7 @@ Template files for the Docker deployment infrastructure: docker-compose, Dockerf
 
 ## docker-compose.yml Template
 
-Based on current blue-green-template compose, enhanced with:
+Based on current blue-green compose, enhanced with:
 - `{{PROJECT_NAME}}` as compose project name
 - `{{APP_PORT}}` for app service port
 - Tarball-based build context (Dockerfile in `deployment/`)

@@ -5,14 +5,14 @@
 # Thin bash wrapper that downloads the scaffold repo and runs scaffold.js.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/TrueSoftwareNL/blue-green-template/master/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/blendsdk/blue-green/master/install.sh | bash
 #   curl -fsSL .../install.sh | bash -s -- --name myapp --port 8080
 #   BG_VERSION=v1.0.0 curl -fsSL .../install.sh | bash
 # =============================================================================
 set -e
 
 # --- Configuration ---
-REPO="TrueSoftwareNL/blue-green-template"
+REPO="blendsdk/blue-green"
 VERSION="${BG_VERSION:-master}"
 ARCHIVE_URL="https://github.com/${REPO}/archive/refs/heads/${VERSION}.tar.gz"
 
@@ -48,8 +48,8 @@ fi
 # Extract — GitHub archives contain a single top-level directory
 tar -xzf "$TMPDIR/scaffold.tar.gz" -C "$TMPDIR"
 
-# Find the extracted directory (e.g., blue-green-template-master/)
-SCAFFOLD_DIR=$(find "$TMPDIR" -maxdepth 1 -type d -name "blue-green-template-*" | head -1)
+# Find the extracted directory (e.g., blue-green-master/)
+SCAFFOLD_DIR=$(find "$TMPDIR" -maxdepth 1 -type d -name "blue-green-*" | head -1)
 
 if [ -z "$SCAFFOLD_DIR" ] || [ ! -f "$SCAFFOLD_DIR/scaffold/scaffold.js" ]; then
   echo "❌ Failed to extract scaffold. Archive may be corrupted." >&2
