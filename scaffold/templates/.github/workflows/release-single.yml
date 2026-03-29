@@ -165,7 +165,9 @@ jobs:
           scp -F $SSH_CONFIG deployment/nginx/conf.d/* ${REMOTE_HOST}:${REMOTE_PATH}/nginx/conf.d/
           scp -F $SSH_CONFIG deployment/nginx/includes/* ${REMOTE_HOST}:${REMOTE_PATH}/nginx/includes/
           scp -F $SSH_CONFIG deployment/nginx/locations/* ${REMOTE_HOST}:${REMOTE_PATH}/nginx/locations/
-          scp -F $SSH_CONFIG deployment/nginx/upstreams/*-upstream.conf ${REMOTE_HOST}:${REMOTE_PATH}/nginx/upstreams/
+          scp -F $SSH_CONFIG deployment/nginx/upstreams/blue-upstream.conf deployment/nginx/upstreams/green-upstream.conf ${REMOTE_HOST}:${REMOTE_PATH}/nginx/upstreams/
+          # Only seed active-upstream.conf on first deploy (preserve blue/green state)
+          ssh -F $SSH_CONFIG ${REMOTE_HOST} "test -f ${REMOTE_PATH}/nginx/upstreams/active-upstream.conf || cp ${REMOTE_PATH}/nginx/upstreams/blue-upstream.conf ${REMOTE_PATH}/nginx/upstreams/active-upstream.conf"
 
           {{DEPLOY_PGBACKUP_STEP}}
 
