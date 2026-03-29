@@ -334,6 +334,7 @@ function buildTemplateVars(answers) {
     NGINX_PORT: answers.nginxPort,
     APP_REPLICAS: answers.appReplicas,
     ENTRYPOINT: answers.entrypoint,
+    ENTRYPOINT_ARRAY: answers.entrypoint.split(/\s+/).map(s => `"${s}"`).join(', '),
   };
 
   // --- Docker Compose conditionals ---
