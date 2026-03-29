@@ -36,8 +36,8 @@ echo "Waiting for ${SERVICE} to be healthy (timeout: ${TIMEOUT}s)..."
 
 while [[ "$ELAPSED" -lt "$TIMEOUT" ]]; do
     # Count total containers (one ID per line) and healthy ones (Go template)
-    TOTAL=$($DC ps -q "${SERVICE}" 2>/dev/null | wc -l || echo 0)
-    HEALTHY=$($DC ps --format '{{.Health}}' "${SERVICE}" 2>/dev/null | grep -ci 'healthy' || echo 0)
+    TOTAL=$($DC ps -q "${SERVICE}" 2>/dev/null | wc -l | tr -d '[:space:]')
+    HEALTHY=$($DC ps --format '{{.Health}}' "${SERVICE}" 2>/dev/null | grep -ci 'healthy') || HEALTHY=0
 
     if [[ "$TOTAL" -gt 0 && "$TOTAL" -eq "$HEALTHY" ]]; then
         echo "All ${TOTAL} replicas of ${SERVICE} are healthy (${ELAPSED}s elapsed)."

@@ -232,9 +232,9 @@ cmd_blue_green_deploy() {
     return 2
   fi
 
-  # Step 5: Start target replicas
-  log_step "5/11" "Starting app_${target_color} replicas..."
-  dc --profile "${target_color}" up -d
+  # Step 5: Start core services (nginx) + target replicas
+  log_step "5/11" "Starting core services and app_${target_color} replicas..."
+  dc --profile core --profile "${target_color}" up -d
 
   # Step 6: Wait for health checks
   log_step "6/11" "Waiting for app_${target_color} health checks..."
