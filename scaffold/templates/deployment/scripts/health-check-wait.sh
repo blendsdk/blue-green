@@ -5,12 +5,12 @@
 # Polls Docker Compose service health until all replicas are healthy.
 # Used by remote-ops.sh to verify new replicas before switching traffic.
 #
-# Usage: ./scripts/health-check-wait.sh <service-name> [timeout-seconds] [poll-interval]
+# Usage: ./scripts/health-check-wait.sh <service-name> [timeout-seconds] [compose-file]
 #
 # Arguments:
 #   service-name    Docker Compose service name (e.g., app_blue, app_green)
 #   timeout-seconds Maximum seconds to wait (default: 120)
-#   poll-interval   Seconds between polls (default: 2)
+#   compose-file    Path to docker-compose.yml (default: docker-compose.yml in cwd)
 #
 # Exit codes:
 #   0 = All replicas healthy
@@ -19,9 +19,16 @@
 
 set -eu
 
-SERVICE="${1:?Usage: $0 <service-name> [timeout] [interval]}"
+SERVICE="${1:?Usage: $0 <service-name> [timeout] [compose-file]}"
 TIMEOUT="${2:-120}"
-INTERVAL="${3:-2}"
+COMPOSE_FILE="${3:-}"
+INTERVAL=2
+
+# Build compose command with optional -f flag
+DC="docker compose"
+if [[ -n "$COMPOSE_FILE" ]]; then
+  DC="docker compose -f ${COMPOSE_FILE}"
+fi
 
 ELAPSED=0
 
@@ -29,8 +36,8 @@ echo "Waiting for ${SERVICE} to be healthy (timeout: ${TIMEOUT}s)..."
 
 while [[ "$ELAPSED" -lt "$TIMEOUT" ]]; do
     # Count total containers (one ID per line) and healthy ones (Go template)
-    TOTAL=$(docker compose ps -q "${SERVICE}" 2>/dev/null | wc -l || echo 0)
-    HEALTHY=$(docker compose ps --format '{{.Health}}' "${SERVICE}" 2>/dev/null | grep -ci 'healthy' || echo 0)
+    TOTAL=$($DC ps -q "${SERVICE}" 2>/dev/null | wc -l || echo 0)
+    HEALTHY=$($DC ps --format '{{.Health}}' "${SERVICE}" 2>/dev/null | grep -ci 'healthy' || echo 0)
 
     if [[ "$TOTAL" -gt 0 && "$TOTAL" -eq "$HEALTHY" ]]; then
         echo "All ${TOTAL} replicas of ${SERVICE} are healthy (${ELAPSED}s elapsed)."
@@ -46,6 +53,6 @@ echo "Timeout: Only ${HEALTHY:-0}/${TOTAL:-0} replicas of ${SERVICE} became heal
 
 # Print container logs for debugging
 echo "--- Last 20 lines of ${SERVICE} logs ---" >&2
-docker compose logs "${SERVICE}" --tail=20 2>&1 >&2 || true
+$DC logs "${SERVICE}" --tail=20 2>&1 >&2 || true
 
 exit 1

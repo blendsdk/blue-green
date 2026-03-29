@@ -120,10 +120,12 @@ wait_for_service() {
   local service="$1"
   local timeout="${2:-120}"
 
+  local compose_file="${DEPLOY_PATH}/docker-compose.yml"
+
   if [[ -x "${SCRIPT_DIR}/health-check-wait.sh" ]]; then
-    "${SCRIPT_DIR}/health-check-wait.sh" "$service" "$timeout"
+    "${SCRIPT_DIR}/health-check-wait.sh" "$service" "$timeout" "$compose_file"
   else
-    bash "${SCRIPT_DIR}/health-check-wait.sh" "$service" "$timeout"
+    bash "${SCRIPT_DIR}/health-check-wait.sh" "$service" "$timeout" "$compose_file"
   fi
 }
 
