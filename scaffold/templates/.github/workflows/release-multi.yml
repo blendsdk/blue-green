@@ -195,6 +195,18 @@ jobs:
         env:
           ALL_SECRETS: ${{ toJSON(secrets) }}
 
+      - name: Set deployment environment
+        run: |
+          SSH_CONFIG="${{ steps.ssh.outputs.ssh_config }}"
+          REMOTE_HOST="${{ matrix.host }}"
+          REMOTE_PATH="${{ secrets.DEPLOY_PATH }}"
+          ssh -F $SSH_CONFIG ${REMOTE_HOST} "
+            if grep -q '^DEPLOY_ENV=' ${REMOTE_PATH}/.env 2>/dev/null; then
+              sed -i 's/^DEPLOY_ENV=.*/DEPLOY_ENV=${{ inputs.deploy_target }}/' ${REMOTE_PATH}/.env
+            else
+              echo 'DEPLOY_ENV=${{ inputs.deploy_target }}' >> ${REMOTE_PATH}/.env
+            fi"
+
       - name: Blue-green deploy
         run: |
           ssh -F ${{ steps.ssh.outputs.ssh_config }} ${{ matrix.host }} \
