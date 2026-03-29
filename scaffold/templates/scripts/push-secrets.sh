@@ -153,8 +153,9 @@ for env in $ENVS; do
   ENTRIES=$(node -e "
     const fs = require('fs');
     const m = JSON.parse(fs.readFileSync('${MANIFEST}', 'utf-8'));
-    const prefix = m.environments['${env}'];
-    if (!prefix) { console.error('Unknown env: ${env}'); process.exit(1); }
+    const entry = m.environments['${env}'];
+    if (!entry) { console.error('Unknown env: ${env}'); process.exit(1); }
+    const prefix = typeof entry === 'string' ? entry : entry.prefix;
     for (const c of m.configs) {
       const key = c.secret_key.replace('{ENV}', prefix);
       const file = c.local_file.replace('{env}', '${env}');
