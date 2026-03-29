@@ -88,7 +88,7 @@ jobs:
 
   # ── Direct SSH / Jump Host deploy (2-20 servers) ───────────
   deploy-direct:
-    name: Deploy to ${{ matrix.server.name }}
+    name: Deploy to ${{ matrix.name }}
     runs-on: self-hosted
     timeout-minutes: 20
     needs: [prepare]
@@ -97,7 +97,7 @@ jobs:
       fail-fast: false
       max-parallel: 5
       matrix:
-        server: ${{ fromJSON(needs.prepare.outputs.servers) }}
+        include: ${{ fromJSON(needs.prepare.outputs.servers) }}
     steps:
       - name: Clean workspace
         run: find . -mindepth 1 -delete 2>/dev/null || true
@@ -147,7 +147,7 @@ jobs:
       - name: Upload scripts
         run: |
           SSH_CONFIG="${{ steps.ssh.outputs.ssh_config }}"
-          REMOTE_HOST="${{ matrix.server.host }}"
+          REMOTE_HOST="${{ matrix.host }}"
           REMOTE_PATH="${{ secrets.DEPLOY_PATH }}"
 
           ssh -F $SSH_CONFIG ${REMOTE_HOST} "mkdir -p ${REMOTE_PATH}/scripts"
@@ -156,18 +156,18 @@ jobs:
 
       - name: Setup remote directories
         run: |
-          ssh -F ${{ steps.ssh.outputs.ssh_config }} ${{ matrix.server.host }} \
+          ssh -F ${{ steps.ssh.outputs.ssh_config }} ${{ matrix.host }} \
             "${{ secrets.DEPLOY_PATH }}/scripts/remote-ops.sh setup-dirs"
 
       - name: Deploy tarball
-        run: ./deploy-package.sh ${{ matrix.server.host }} ${{ secrets.JUMP_HOST }}
+        run: ./deploy-package.sh ${{ matrix.host }} ${{ secrets.JUMP_HOST }}
         env:
           DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
 
       - name: Deploy Docker and Nginx configuration
         run: |
           SSH_CONFIG="${{ steps.ssh.outputs.ssh_config }}"
-          REMOTE_HOST="${{ matrix.server.host }}"
+          REMOTE_HOST="${{ matrix.host }}"
           REMOTE_PATH="${{ secrets.DEPLOY_PATH }}"
 
           scp -F $SSH_CONFIG deployment/Dockerfile deployment/docker-compose.yml ${REMOTE_HOST}:${REMOTE_PATH}/
@@ -183,19 +183,19 @@ jobs:
           deployment/scripts/deploy-config-files.sh \
             "${{ inputs.deploy_target }}" \
             "${{ steps.ssh.outputs.ssh_config }}" \
-            "${{ matrix.server.host }}" \
+            "${{ matrix.host }}" \
             "${{ secrets.DEPLOY_PATH }}"
         env:
           ALL_SECRETS: ${{ toJSON(secrets) }}
 
       - name: Blue-green deploy
         run: |
-          ssh -F ${{ steps.ssh.outputs.ssh_config }} ${{ matrix.server.host }} \
+          ssh -F ${{ steps.ssh.outputs.ssh_config }} ${{ matrix.host }} \
             "${{ secrets.DEPLOY_PATH }}/scripts/remote-ops.sh blue-green-deploy"
 
       - name: Post-deploy health check
         run: |
-          ssh -F ${{ steps.ssh.outputs.ssh_config }} ${{ matrix.server.host }} \
+          ssh -F ${{ steps.ssh.outputs.ssh_config }} ${{ matrix.host }} \
             "${{ secrets.DEPLOY_PATH }}/scripts/remote-ops.sh wait-healthy 120"
 
   # ── Deployment server fan-out (20+ servers) ────────────────

@@ -76,7 +76,7 @@ jobs:
           echo "access_mode=$($RESOLVE_CMD --format access-mode)" >> $GITHUB_OUTPUT
 
   operate:
-    name: "${{ inputs.operation }} on ${{ matrix.server.name }}"
+    name: "${{ inputs.operation }} on ${{ matrix.name }}"
     runs-on: self-hosted
     timeout-minutes: 15
     needs: [resolve]
@@ -84,7 +84,7 @@ jobs:
       fail-fast: false
       max-parallel: 10
       matrix:
-        server: ${{ fromJSON(needs.resolve.outputs.servers) }}
+        include: ${{ fromJSON(needs.resolve.outputs.servers) }}
     steps:
       - name: Safety check — block destructive ops on production
         if: inputs.target == 'production' && inputs.operation == 'purge-database'
@@ -137,7 +137,7 @@ jobs:
       - name: Execute operation
         run: |
           SSH_CONFIG="${{ steps.ssh.outputs.ssh_config }}"
-          SERVER="${{ matrix.server.host }}"
+          SERVER="${{ matrix.host }}"
           REMOTE_PATH="${{ secrets.DEPLOY_PATH }}"
           OP="${{ inputs.operation }}"
 
@@ -162,6 +162,6 @@ jobs:
               ssh -F $SSH_CONFIG ${SERVER} "${REMOTE_PATH}/scripts/remote-ops.sh purge-database"
               ;;
           esac
-          echo "✅ ${OP} completed on ${{ matrix.server.name }}"
+          echo "✅ ${OP} completed on ${{ matrix.name }}"
         env:
           ALL_SECRETS: ${{ toJSON(secrets) }}
