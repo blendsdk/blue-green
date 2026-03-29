@@ -249,9 +249,16 @@ async function main(): Promise<void> {
   await dispatch(args);
 }
 
-// Run main and handle top-level errors
-main().catch((error: unknown) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(`❌ Fatal error: ${message}`);
-  process.exit(1);
-});
+// Only run main() when this file is executed directly (not imported for testing).
+// In ESM, we check if the resolved module URL matches the CLI entry in process.argv.
+const isDirectExecution = process.argv[1] &&
+  (import.meta.url.endsWith(process.argv[1]) ||
+   import.meta.url === `file://${process.argv[1]}`);
+
+if (isDirectExecution) {
+  main().catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`❌ Fatal error: ${message}`);
+    process.exit(1);
+  });
+}

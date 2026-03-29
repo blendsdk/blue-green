@@ -7,7 +7,7 @@
   "scripts": {
     "build:cli": "node esbuild.config.mjs",
     "typecheck": "tsc --noEmit",
-    "test:cli": "node --test src/deploy-cli/__tests__/*.test.ts",
+    "test:cli": "node --experimental-strip-types --test src/deploy-cli/__tests__/*.test.ts",
     "verify": "tsc --noEmit && node esbuild.config.mjs"
   },
   "devDependencies": {

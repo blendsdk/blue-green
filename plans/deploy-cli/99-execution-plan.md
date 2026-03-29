@@ -3,7 +3,7 @@
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
 > **Last Updated**: 2026-03-29 23:20
-> **Progress**: 6/42 tasks (14%)
+> **Progress**: 16/42 tasks (38%)
 
 ## Overview
 
@@ -366,16 +366,16 @@ Implement a TypeScript deployment CLI that replaces bash-in-YAML orchestration, 
 - [x] 1.1.6 Verify end-to-end build pipeline ✅ (completed: 2026-03-30 00:49)
 
 ### Phase 2: Deploy CLI Core Libraries
-- [ ] 2.1.1 Implement lib/process.ts
-- [ ] 2.1.2 Implement lib/logger.ts
-- [ ] 2.1.3 Implement lib/ssh.ts
-- [ ] 2.1.4 Implement lib/config.ts
-- [ ] 2.1.5 Implement lib/inventory.ts
-- [ ] 2.2.1 Create test fixtures
-- [ ] 2.2.2 Unit tests for config.ts
-- [ ] 2.2.3 Unit tests for inventory.ts
-- [ ] 2.2.4 Unit tests for parser
-- [ ] 2.2.5 Verify all tests pass + bundle builds
+- [x] 2.1.1 Implement lib/process.ts ✅ (completed: 2026-03-30 00:51)
+- [x] 2.1.2 Implement lib/logger.ts ✅ (completed: 2026-03-30 00:51)
+- [x] 2.1.3 Implement lib/ssh.ts ✅ (completed: 2026-03-30 00:52)
+- [x] 2.1.4 Implement lib/config.ts ✅ (completed: 2026-03-30 00:52)
+- [x] 2.1.5 Implement lib/inventory.ts ✅ (completed: 2026-03-30 00:53)
+- [x] 2.2.1 Create test fixtures ✅ (completed: 2026-03-30 00:54)
+- [x] 2.2.2 Unit tests for config.ts (13 tests) ✅ (completed: 2026-03-30 00:55)
+- [x] 2.2.3 Unit tests for inventory.ts (24 tests) ✅ (completed: 2026-03-30 00:55)
+- [x] 2.2.4 Unit tests for parser (20 tests) ✅ (completed: 2026-03-30 00:56)
+- [x] 2.2.5 Verify: 57/57 tests pass, tsc + build pass ✅ (completed: 2026-03-30 00:57)
 
 ### Phase 3: Deploy CLI Commands
 - [ ] 3.1.1 Implement commands/upload.ts

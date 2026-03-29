@@ -121,11 +121,14 @@ async function main() {
   }
   await dispatch(args);
 }
-main().catch((error) => {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(`\u274C Fatal error: ${message}`);
-  process.exit(1);
-});
+var isDirectExecution = process.argv[1] && (import.meta.url.endsWith(process.argv[1]) || import.meta.url === `file://${process.argv[1]}`);
+if (isDirectExecution) {
+  main().catch((error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`\u274C Fatal error: ${message}`);
+    process.exit(1);
+  });
+}
 export {
   parseArgs
 };
