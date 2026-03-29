@@ -329,6 +329,7 @@ function readPartial(filename) {
 function buildTemplateVars(answers) {
   const vars = {
     PROJECT_NAME: answers.name,
+    PROJECT_NAME_LOWER: answers.name.toLowerCase().replace(/[^a-z0-9_-]/g, '-'),
     APP_PORT: answers.appPort,
     NGINX_PORT: answers.nginxPort,
     APP_REPLICAS: answers.appReplicas,
