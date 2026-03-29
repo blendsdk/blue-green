@@ -78,7 +78,7 @@ log_step() {
 # Usage: dc up -d
 #        dc --profile blue up -d
 dc() {
-  docker compose -f "${DEPLOY_PATH}/docker-compose.yml" "$@"
+  docker compose -f "${DEPLOY_PATH}/docker-compose.yml" --env-file "${DEPLOY_PATH}/.env" "$@"
 }
 
 # Detect the current active color from the Nginx upstream config.
