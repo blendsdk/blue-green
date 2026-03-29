@@ -41,7 +41,14 @@
  * @module deploy-cli
  */
 
-import type { ParsedArgs, CommandDefinition } from './types.js';
+import type { ParsedArgs, CommandDefinition } from './types.ts';
+import { prepareCommand } from './commands/prepare.ts';
+import { switchCommand } from './commands/switch.ts';
+import { deployCommand } from './commands/deploy.ts';
+import { uploadCommand } from './commands/upload.ts';
+import { deployConfigCommand } from './commands/deploy-config.ts';
+import { operateCommand } from './commands/operate.ts';
+import { registryCommand } from './commands/registry.ts';
 
 // ── Constants ───────────────────────────────────────────
 
@@ -126,11 +133,45 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
 /**
  * Registry of available commands.
- * Commands are added in Phase 3 — for now, this is an empty array
- * that the dispatcher iterates over.
+ * Each command has a name (used on CLI), description (shown in --help),
+ * and handler function that receives parsed arguments.
  */
 const commands: CommandDefinition[] = [
-  // Phase 3 will add: prepare, switch, deploy, upload, deploy-config, operate, registry
+  {
+    name: 'prepare',
+    description: 'Run blue-green-prepare on all resolved servers',
+    handler: prepareCommand,
+  },
+  {
+    name: 'switch',
+    description: 'Run blue-green-switch on all resolved servers',
+    handler: switchCommand,
+  },
+  {
+    name: 'deploy',
+    description: 'Full coordinated deploy (prepare → barrier → switch)',
+    handler: deployCommand,
+  },
+  {
+    name: 'upload',
+    description: 'Upload tarball, scripts, Docker/Nginx configs to servers',
+    handler: uploadCommand,
+  },
+  {
+    name: 'deploy-config',
+    description: 'Deploy config files from secrets to servers',
+    handler: deployConfigCommand,
+  },
+  {
+    name: 'operate',
+    description: 'Run any remote-ops.sh subcommand on servers',
+    handler: operateCommand,
+  },
+  {
+    name: 'registry',
+    description: 'Build + push Docker image to registry (CI-side)',
+    handler: registryCommand,
+  },
 ];
 
 // ── Help & Version ──────────────────────────────────────

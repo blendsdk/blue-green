@@ -16,8 +16,8 @@ import { writeFileSync, unlinkSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
-import type { SSHConfig, SSHOptions } from '../types.js';
-import { spawn } from './process.js';
+import type { SSHConfig, SSHOptions } from '../types.ts';
+import { spawn } from './process.ts';
 
 // ── SSH Config File Generation ──────────────────────────
 

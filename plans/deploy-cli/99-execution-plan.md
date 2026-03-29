@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-03-29 23:20
-> **Progress**: 16/42 tasks (38%)
+> **Last Updated**: 2026-03-30 01:25
+> **Progress**: 25/42 tasks (60%)
 
 ## Overview
 
@@ -378,15 +378,15 @@ Implement a TypeScript deployment CLI that replaces bash-in-YAML orchestration, 
 - [x] 2.2.5 Verify: 57/57 tests pass, tsc + build pass ✅ (completed: 2026-03-30 00:57)
 
 ### Phase 3: Deploy CLI Commands
-- [ ] 3.1.1 Implement commands/upload.ts
-- [ ] 3.1.2 Implement commands/deploy-config.ts
-- [ ] 3.1.3 Implement commands/operate.ts
-- [ ] 3.1.4 Wire commands into dispatcher
-- [ ] 3.2.1 Implement commands/prepare.ts
-- [ ] 3.2.2 Implement commands/switch.ts
-- [ ] 3.2.3 Implement commands/deploy.ts
-- [ ] 3.2.4 Implement commands/registry.ts
-- [ ] 3.2.5 Wire all commands + verify build
+- [x] 3.1.1 Implement commands/upload.ts ✅ (completed: 2026-03-30 01:15)
+- [x] 3.1.2 Implement commands/deploy-config.ts ✅ (completed: 2026-03-30 01:16)
+- [x] 3.1.3 Implement commands/operate.ts ✅ (completed: 2026-03-30 01:17)
+- [x] 3.1.4 Wire commands into dispatcher ✅ (completed: 2026-03-30 01:20)
+- [x] 3.2.1 Implement commands/prepare.ts ✅ (completed: 2026-03-30 01:18)
+- [x] 3.2.2 Implement commands/switch.ts ✅ (completed: 2026-03-30 01:19)
+- [x] 3.2.3 Implement commands/deploy.ts ✅ (completed: 2026-03-30 01:19)
+- [x] 3.2.4 Implement commands/registry.ts ✅ (completed: 2026-03-30 01:20)
+- [x] 3.2.5 Wire all commands + verify build ✅ (completed: 2026-03-30 01:25)
 
 ### Phase 4: remote-ops.sh Updates
 - [ ] 4.1.1 Add detect_strategy() function

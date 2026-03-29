@@ -17,7 +17,7 @@ import type {
   DeployInventory,
   EnvironmentInventory,
   ServerEntry,
-} from '../types.js';
+} from '../types.ts';
 
 // ── Inventory Reading ───────────────────────────────────
 

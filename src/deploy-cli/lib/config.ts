@@ -13,7 +13,7 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
-import type { DeployConfig, ConfigEntry, EnvironmentConfig } from '../types.js';
+import type { DeployConfig, ConfigEntry, EnvironmentConfig } from '../types.ts';
 
 /**
  * A config entry with all placeholders resolved for a specific environment.

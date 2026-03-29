@@ -8,7 +8,7 @@
  * @module lib/logger
  */
 
-import type { OperationResult } from '../types.js';
+import type { OperationResult } from '../types.ts';
 
 /**
  * Structured logger with consistent formatting for CI output.
