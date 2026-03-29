@@ -29,8 +29,8 @@ echo "Waiting for ${SERVICE} to be healthy (timeout: ${TIMEOUT}s)..."
 
 while [[ "$ELAPSED" -lt "$TIMEOUT" ]]; do
     # Count total and healthy containers for this service
-    TOTAL=$(docker compose ps --format json "${SERVICE}" 2>/dev/null | wc -l)
-    HEALTHY=$(docker compose ps --format json "${SERVICE}" 2>/dev/null | grep -c '"healthy"' || true)
+    TOTAL=$(docker compose ps -q "${SERVICE}" 2>/dev/null | wc -l || echo 0)
+    HEALTHY=$(docker compose ps --format '{{.Health}}' "${SERVICE}" 2>/dev/null | grep -ci 'healthy' || echo 0)
 
     if [[ "$TOTAL" -gt 0 && "$TOTAL" -eq "$HEALTHY" ]]; then
         echo "All ${TOTAL} replicas of ${SERVICE} are healthy (${ELAPSED}s elapsed)."
