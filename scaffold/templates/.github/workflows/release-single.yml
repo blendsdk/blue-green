@@ -85,12 +85,25 @@ jobs:
 
       - name: Setup SSH
         id: ssh
+        env:
+          SSH_KEY_VALUE: ${{ secrets.SSH_PRIVATE_KEY }}
         run: |
           SSH_CONFIG="/tmp/ssh-deploy-config"
+          IDENTITY_LINE=""
+
+          # Write SSH key from secret if provided (optional — skip if runner has pre-configured SSH)
+          if [ -n "$SSH_KEY_VALUE" ]; then
+            SSH_KEY="/tmp/ssh-deploy-key"
+            printf '%s\n' "$SSH_KEY_VALUE" > $SSH_KEY
+            chmod 600 $SSH_KEY
+            IDENTITY_LINE="  IdentityFile $SSH_KEY"
+          fi
+
           cat > $SSH_CONFIG << EOF
           Host *
             StrictHostKeyChecking no
             UserKnownHostsFile /dev/null
+          ${IDENTITY_LINE}
           EOF
 
           JUMP_HOST="${{ secrets.JUMP_HOST }}"
