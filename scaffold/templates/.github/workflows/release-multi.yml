@@ -78,7 +78,11 @@ jobs:
       - name: Resolve target servers
         id: resolve
         run: |
-          RESOLVE_CMD="node deployment/scripts/resolve-servers.js --env ${{ inputs.deploy_target }} --scope ${{ inputs.deploy_scope }} --filter ${{ inputs.deploy_filter }}"
+          FILTER_ARG=""
+          if [ -n "${{ inputs.deploy_filter }}" ]; then
+            FILTER_ARG="--filter ${{ inputs.deploy_filter }}"
+          fi
+          RESOLVE_CMD="node deployment/scripts/resolve-servers.js --env ${{ inputs.deploy_target }} --scope ${{ inputs.deploy_scope }} ${FILTER_ARG}"
 
           echo "servers=$($RESOLVE_CMD --format matrix)" >> $GITHUB_OUTPUT
           echo "count=$($RESOLVE_CMD --format count)" >> $GITHUB_OUTPUT
