@@ -56,6 +56,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Resolve deploy path
+        run: echo "DEPLOY_PATH=${{ secrets.DEPLOY_PATH }}/${{ inputs.deploy_target }}" >> $GITHUB_ENV
+
       - name: Install dependencies
         run: |
           npm install -g yarn
@@ -132,7 +135,7 @@ jobs:
         run: |
           SSH_CONFIG="${{ steps.ssh.outputs.ssh_config }}"
           REMOTE_HOST="${{ steps.target.outputs.server }}"
-          REMOTE_PATH="${{ secrets.DEPLOY_PATH }}"
+          REMOTE_PATH="${{ env.DEPLOY_PATH }}"
 
           ssh -F $SSH_CONFIG ${REMOTE_HOST} "mkdir -p ${REMOTE_PATH}/scripts"
           scp -F $SSH_CONFIG deployment/scripts/remote-ops.sh deployment/scripts/health-check-wait.sh ${REMOTE_HOST}:${REMOTE_PATH}/scripts/
@@ -142,18 +145,18 @@ jobs:
       - name: Setup remote directories
         run: |
           ssh -F ${{ steps.ssh.outputs.ssh_config }} ${{ steps.target.outputs.server }} \
-            "${{ secrets.DEPLOY_PATH }}/scripts/remote-ops.sh setup-dirs"
+            "${{ env.DEPLOY_PATH }}/scripts/remote-ops.sh setup-dirs"
 
       - name: Deploy tarball
         run: ./deploy-package.sh ${{ steps.target.outputs.server }} ${{ secrets.JUMP_HOST }}
         env:
-          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_PATH: ${{ env.DEPLOY_PATH }}
 
       - name: Deploy Docker and Nginx configuration
         run: |
           SSH_CONFIG="${{ steps.ssh.outputs.ssh_config }}"
           REMOTE_HOST="${{ steps.target.outputs.server }}"
-          REMOTE_PATH="${{ secrets.DEPLOY_PATH }}"
+          REMOTE_PATH="${{ env.DEPLOY_PATH }}"
 
           # Copy Docker files
           scp -F $SSH_CONFIG deployment/Dockerfile deployment/docker-compose.yml ${REMOTE_HOST}:${REMOTE_PATH}/
@@ -176,7 +179,7 @@ jobs:
       - name: Prepare deployment for Docker build
         run: |
           ssh -F ${{ steps.ssh.outputs.ssh_config }} ${{ steps.target.outputs.server }} \
-            "${{ secrets.DEPLOY_PATH }}/scripts/remote-ops.sh receive-deploy"
+            "${{ env.DEPLOY_PATH }}/scripts/remote-ops.sh receive-deploy"
 
       - name: Deploy config files from secrets
         run: |
@@ -184,7 +187,7 @@ jobs:
             "${{ inputs.deploy_target }}" \
             "${{ steps.ssh.outputs.ssh_config }}" \
             "${{ steps.target.outputs.server }}" \
-            "${{ secrets.DEPLOY_PATH }}"
+            "${{ env.DEPLOY_PATH }}"
         env:
           ALL_SECRETS: ${{ toJSON(secrets) }}
 
@@ -192,20 +195,39 @@ jobs:
         run: |
           SSH_CONFIG="${{ steps.ssh.outputs.ssh_config }}"
           REMOTE_HOST="${{ steps.target.outputs.server }}"
-          REMOTE_PATH="${{ secrets.DEPLOY_PATH }}"
-          ssh -F $SSH_CONFIG ${REMOTE_HOST} "
-            if grep -q '^DEPLOY_ENV=' ${REMOTE_PATH}/.env 2>/dev/null; then
-              sed -i 's/^DEPLOY_ENV=.*/DEPLOY_ENV=${{ inputs.deploy_target }}/' ${REMOTE_PATH}/.env
-            else
+          REMOTE_PATH="${{ env.DEPLOY_PATH }}"
+
+          # Resolve env_defaults from deploy-config.json
+          ENV_DEFAULTS=$(node deployment/scripts/resolve-config.js ${{ inputs.deploy_target }} --format env-defaults)
+
+          # Build the env update script
+          ENV_SCRIPT="
+            # Set DEPLOY_ENV
+            grep -q '^DEPLOY_ENV=' ${REMOTE_PATH}/.env 2>/dev/null && \
+              sed -i 's/^DEPLOY_ENV=.*/DEPLOY_ENV=${{ inputs.deploy_target }}/' ${REMOTE_PATH}/.env || \
               echo 'DEPLOY_ENV=${{ inputs.deploy_target }}' >> ${REMOTE_PATH}/.env
-            fi"
+
+            # Set COMPOSE_PROJECT_NAME (project-env isolated)
+            grep -q '^COMPOSE_PROJECT_NAME=' ${REMOTE_PATH}/.env 2>/dev/null && \
+              sed -i 's/^COMPOSE_PROJECT_NAME=.*/COMPOSE_PROJECT_NAME={{PROJECT_NAME_LOWER}}-${{ inputs.deploy_target }}/' ${REMOTE_PATH}/.env || \
+              echo 'COMPOSE_PROJECT_NAME={{PROJECT_NAME_LOWER}}-${{ inputs.deploy_target }}' >> ${REMOTE_PATH}/.env
+          "
+
+          # Add env_defaults (only if not already set — secrets .env takes priority)
+          while IFS='=' read -r key value; do
+            [ -z "$key" ] && continue
+            ENV_SCRIPT="$ENV_SCRIPT
+            grep -q '^${key}=' ${REMOTE_PATH}/.env 2>/dev/null || echo '${key}=${value}' >> ${REMOTE_PATH}/.env"
+          done <<< "$ENV_DEFAULTS"
+
+          ssh -F $SSH_CONFIG ${REMOTE_HOST} "$ENV_SCRIPT"
 
       - name: Blue-green deploy
         run: |
           ssh -F ${{ steps.ssh.outputs.ssh_config }} ${{ steps.target.outputs.server }} \
-            "${{ secrets.DEPLOY_PATH }}/scripts/remote-ops.sh blue-green-deploy"
+            "${{ env.DEPLOY_PATH }}/scripts/remote-ops.sh blue-green-deploy"
 
       - name: Post-deploy health check
         run: |
           ssh -F ${{ steps.ssh.outputs.ssh_config }} ${{ steps.target.outputs.server }} \
-            "${{ secrets.DEPLOY_PATH }}/scripts/remote-ops.sh wait-healthy 120"
+            "${{ env.DEPLOY_PATH }}/scripts/remote-ops.sh wait-healthy 120"

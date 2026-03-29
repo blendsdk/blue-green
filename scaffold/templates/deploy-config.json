@@ -14,8 +14,26 @@
     }
   ],
   "environments": {
-    "test": "TEST",
-    "acceptance": "ACC",
-    "production": "PROD"
+    "test": {
+      "prefix": "TEST",
+      "env_defaults": {
+        "NGINX_HTTP_PORT": "8080",
+        "DOZZLE_PORT": "9980"
+      }
+    },
+    "acceptance": {
+      "prefix": "ACC",
+      "env_defaults": {
+        "NGINX_HTTP_PORT": "8081",
+        "DOZZLE_PORT": "9981"
+      }
+    },
+    "production": {
+      "prefix": "PROD",
+      "env_defaults": {
+        "NGINX_HTTP_PORT": "8082",
+        "DOZZLE_PORT": "9982"
+      }
+    }
   }
 }
