@@ -12,7 +12,7 @@
 #   - SSH key access from deployment server to all target servers
 #   - deployment-latest.tgz and scripts already on deployment server
 #   - deploy-inventory.json on deployment server
-#   - Node.js available for resolve-servers.js
+#   - Node.js available for resolve-servers.js (ESM — requires "type": "module" in package.json)
 # =============================================================================
 
 set -euo pipefail
@@ -59,12 +59,13 @@ echo -e "  Max parallel: ${MAX_PARALLEL}"
 echo ""
 
 # ── Resolve Servers ──────────────────────────────────────────
+# Uses resolve-servers.js --format flag for clean shell consumption (no inline JS)
 FILTER_ARGS=""
 [[ -n "$FILTER" ]] && FILTER_ARGS="--filter ${FILTER}"
 
-RESULT=$(node "${SCRIPT_DIR}/resolve-servers.js" --env "$ENV" --scope "$SCOPE" $FILTER_ARGS)
-SERVER_COUNT=$(echo "$RESULT" | node -e "d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));console.log(d.count)")
-SERVERS_JSON=$(echo "$RESULT" | node -e "d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));console.log(JSON.stringify(d.servers))")
+RESOLVE_CMD="node ${SCRIPT_DIR}/resolve-servers.js --env $ENV --scope $SCOPE $FILTER_ARGS"
+SERVER_COUNT=$($RESOLVE_CMD --format count)
+SERVERS=$($RESOLVE_CMD --format tsv)
 
 echo -e "  Servers:      ${SERVER_COUNT}"
 echo ""
@@ -75,11 +76,6 @@ if [[ "$SERVER_COUNT" -eq 0 ]]; then
 fi
 
 # ── Deploy in Batches ────────────────────────────────────────
-# Extract server list as name:host pairs
-SERVERS=$(echo "$SERVERS_JSON" | node -e "
-  const servers = JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));
-  servers.forEach(s => console.log(s.name + '\t' + s.host));
-")
 
 SUCCESS=0
 FAILED=0

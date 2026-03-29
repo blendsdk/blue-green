@@ -69,14 +69,11 @@ jobs:
       - name: Resolve servers
         id: resolve
         run: |
-          RESULT=$(node deployment/scripts/resolve-servers.js \
-            --env "${{ inputs.target }}" \
-            --scope "${{ inputs.server_scope }}" \
-            --filter "${{ inputs.server_filter }}")
+          RESOLVE_CMD="node deployment/scripts/resolve-servers.js --env ${{ inputs.target }} --scope ${{ inputs.server_scope }} --filter ${{ inputs.server_filter }}"
 
-          echo "servers=$(echo $RESULT | node -e "d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));console.log(JSON.stringify(d.servers))")" >> $GITHUB_OUTPUT
-          echo "count=$(echo $RESULT | node -e "d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));console.log(d.count)")" >> $GITHUB_OUTPUT
-          echo "access_mode=$(echo $RESULT | node -e "d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));console.log(d.access_mode)")" >> $GITHUB_OUTPUT
+          echo "servers=$($RESOLVE_CMD --format matrix)" >> $GITHUB_OUTPUT
+          echo "count=$($RESOLVE_CMD --format count)" >> $GITHUB_OUTPUT
+          echo "access_mode=$($RESOLVE_CMD --format access-mode)" >> $GITHUB_OUTPUT
 
   operate:
     name: "${{ inputs.operation }} on ${{ matrix.server.name }}"

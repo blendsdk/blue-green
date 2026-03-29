@@ -3,25 +3,29 @@
 // resolve-servers.js — Deploy Inventory Resolver
 // =============================================================================
 // Reads deploy-inventory.json and resolves server list for a given environment.
-// Outputs JSON for GitHub Actions matrix consumption (no jq dependency).
+// Supports multiple output formats for direct consumption by shell scripts
+// and GitHub Actions workflows (no inline JS or jq dependency needed).
 //
 // Usage:
-//   node resolve-servers.js --env production [--scope all|group|tag|server] [--filter value]
+//   node resolve-servers.js --env production [--scope all|group|tag|server] [--filter value] [--format json|count|matrix|access-mode|tsv]
 //
-// Output (JSON to stdout):
-//   {
-//     "servers": [{"name":"prod-01","host":"deploy@10.0.3.10"}, ...],
-//     "count": 2,
-//     "access_mode": "direct"
-//   }
+// Output formats:
+//   json (default)  — Full JSON: {"servers":[...],"count":N,"access_mode":"..."}
+//   count           — Just the server count (e.g., "2")
+//   matrix          — JSON array of servers for GitHub Actions matrix
+//   access-mode     — Just the access mode string (e.g., "direct")
+//   tsv             — Tab-separated name\thost lines for shell consumption
 // =============================================================================
 
-'use strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const fs = require('fs');
-const path = require('path');
+// ESM equivalent of __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// Parse arguments
+// ── Parse CLI arguments ─────────────────────────────────────
 const args = process.argv.slice(2);
 const flags = {};
 for (let i = 0; i < args.length; i += 2) {
@@ -32,13 +36,22 @@ for (let i = 0; i < args.length; i += 2) {
 const env = flags.env;
 const scope = flags.scope || 'all';
 const filter = flags.filter || '';
+const format = flags.format || 'json';
 
 if (!env) {
-  console.error('Usage: node resolve-servers.js --env <environment> [--scope all|group|tag|server] [--filter value]');
+  console.error('Usage: node resolve-servers.js --env <environment> [--scope all|group|tag|server] [--filter value] [--format json|count|matrix|access-mode|tsv]');
   process.exit(1);
 }
 
-// Find inventory file
+// ── Validate format flag ────────────────────────────────────
+const validFormats = ['json', 'count', 'matrix', 'access-mode', 'tsv'];
+if (!validFormats.includes(format)) {
+  console.error(`Error: Unknown format "${format}". Valid: ${validFormats.join(', ')}`);
+  process.exit(1);
+}
+
+// ── Find inventory file ─────────────────────────────────────
+// Walks up from the script's directory to find deploy-inventory.json
 function findInventory() {
   let dir = path.resolve(__dirname, '..', '..');
   for (let i = 0; i < 5; i++) {
@@ -50,7 +63,7 @@ function findInventory() {
   process.exit(1);
 }
 
-// Read inventory
+// ── Read inventory ──────────────────────────────────────────
 let inventory;
 try {
   inventory = JSON.parse(fs.readFileSync(findInventory(), 'utf-8'));
@@ -59,19 +72,19 @@ try {
   process.exit(1);
 }
 
-// Look up environment
+// ── Look up environment ─────────────────────────────────────
 const envConfig = inventory.environments[env];
 if (!envConfig) {
   console.error(`Error: Unknown environment "${env}". Valid: ${Object.keys(inventory.environments).join(', ')}`);
   process.exit(1);
 }
 
-// Filter servers
+// ── Filter servers by scope ─────────────────────────────────
 let servers = envConfig.servers || [];
 
 switch (scope) {
   case 'all':
-    // No filtering
+    // No filtering — use all servers in the environment
     break;
   case 'group':
     if (!filter) { console.error('Error: --filter required for scope "group"'); process.exit(1); }
@@ -95,11 +108,29 @@ if (servers.length === 0) {
   process.exit(1);
 }
 
-// Output for GitHub Actions matrix
-const result = {
-  servers: servers.map(s => ({ name: s.name, host: s.host })),
-  count: servers.length,
-  access_mode: envConfig.access || 'direct'
-};
+// ── Output in the requested format ──────────────────────────
+const serverList = servers.map(s => ({ name: s.name, host: s.host }));
+const accessMode = envConfig.access || 'direct';
 
-console.log(JSON.stringify(result));
+switch (format) {
+  case 'json':
+    // Full JSON output (backward compatible default)
+    console.log(JSON.stringify({ servers: serverList, count: servers.length, access_mode: accessMode }));
+    break;
+  case 'count':
+    // Just the count — for shell variable assignment
+    console.log(servers.length);
+    break;
+  case 'matrix':
+    // JSON array of servers — for GitHub Actions matrix
+    console.log(JSON.stringify(serverList));
+    break;
+  case 'access-mode':
+    // Just the access mode string
+    console.log(accessMode);
+    break;
+  case 'tsv':
+    // Tab-separated name\thost — for shell while-read loops
+    serverList.forEach(s => console.log(`${s.name}\t${s.host}`));
+    break;
+}

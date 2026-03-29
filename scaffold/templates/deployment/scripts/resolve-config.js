@@ -20,12 +20,15 @@
 //   ACC_APP_CONFIG\tapp-config.json\tApp Config
 // =============================================================================
 
-'use strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const fs = require('fs');
-const path = require('path');
+// ESM equivalent of __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// Parse arguments
+// ── Parse arguments ─────────────────────────────────────────
 const env = process.argv[2];
 const manifestPath = process.argv[3] || findManifest();
 
@@ -37,7 +40,7 @@ if (!env) {
 
 /**
  * Find deploy-config.json by walking up from the script's directory.
- * Checks: script dir, parent, grandparent, etc.
+ * Checks: script dir parent, grandparent, etc.
  * @returns {string} Path to deploy-config.json
  */
 function findManifest() {
@@ -51,7 +54,7 @@ function findManifest() {
   process.exit(1);
 }
 
-// Read and parse manifest
+// ── Read and parse manifest ─────────────────────────────────
 let manifest;
 try {
   manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
@@ -60,14 +63,14 @@ try {
   process.exit(1);
 }
 
-// Look up environment prefix (e.g., "acceptance" → "ACC")
+// ── Look up environment prefix (e.g., "acceptance" → "ACC") ─
 const envPrefix = manifest.environments[env];
 if (!envPrefix) {
   console.error(`Error: Unknown environment "${env}". Valid: ${Object.keys(manifest.environments).join(', ')}`);
   process.exit(1);
 }
 
-// Resolve each config entry and output tab-separated lines
+// ── Resolve each config entry and output tab-separated lines ─
 for (const config of manifest.configs) {
   const secretKey = config.secret_key.replace('{ENV}', envPrefix);
   const deployPath = config.deploy_path;

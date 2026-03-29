@@ -78,16 +78,13 @@ jobs:
       - name: Resolve target servers
         id: resolve
         run: |
-          RESULT=$(node deployment/scripts/resolve-servers.js \
-            --env "${{ inputs.deploy_target }}" \
-            --scope "${{ inputs.deploy_scope }}" \
-            --filter "${{ inputs.deploy_filter }}")
+          RESOLVE_CMD="node deployment/scripts/resolve-servers.js --env ${{ inputs.deploy_target }} --scope ${{ inputs.deploy_scope }} --filter ${{ inputs.deploy_filter }}"
 
-          echo "servers=$(echo $RESULT | node -e "d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));console.log(JSON.stringify(d.servers))")" >> $GITHUB_OUTPUT
-          echo "count=$(echo $RESULT | node -e "d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));console.log(d.count)")" >> $GITHUB_OUTPUT
-          echo "access_mode=$(echo $RESULT | node -e "d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));console.log(d.access_mode)")" >> $GITHUB_OUTPUT
+          echo "servers=$($RESOLVE_CMD --format matrix)" >> $GITHUB_OUTPUT
+          echo "count=$($RESOLVE_CMD --format count)" >> $GITHUB_OUTPUT
+          echo "access_mode=$($RESOLVE_CMD --format access-mode)" >> $GITHUB_OUTPUT
 
-          echo "📋 Resolved ${{ inputs.deploy_target }}: $(echo $RESULT | node -e "d=JSON.parse(require('fs').readFileSync('/dev/stdin','utf8'));console.log(d.count)") servers"
+          echo "📋 Resolved ${{ inputs.deploy_target }}: $($RESOLVE_CMD --format count) servers"
 
   # ── Direct SSH / Jump Host deploy (2-20 servers) ───────────
   deploy-direct:
