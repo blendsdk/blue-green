@@ -17,7 +17,7 @@
 #   1 = Timeout — not all replicas became healthy
 # =============================================================================
 
-set -euo pipefail
+set -eu
 
 SERVICE="${1:?Usage: $0 <service-name> [timeout] [interval]}"
 TIMEOUT="${2:-120}"
