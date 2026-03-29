@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-03-30 01:25
-> **Progress**: 25/42 tasks (60%)
+> **Last Updated**: 2026-03-30 01:49
+> **Progress**: 33/42 tasks (79%)
 
 ## Overview
 
@@ -389,14 +389,14 @@ Implement a TypeScript deployment CLI that replaces bash-in-YAML orchestration, 
 - [x] 3.2.5 Wire all commands + verify build ✅ (completed: 2026-03-30 01:25)
 
 ### Phase 4: remote-ops.sh Updates
-- [ ] 4.1.1 Add detect_strategy() function
-- [ ] 4.1.2 Implement cmd_blue_green_prepare
-- [ ] 4.1.3 Implement cmd_blue_green_switch
-- [ ] 4.1.4 Refactor cmd_blue_green_deploy
-- [ ] 4.1.5 Update cmd_rebuild for registry
-- [ ] 4.1.6 Update cmd_rollback for registry
-- [ ] 4.1.7 Update dispatcher and help
-- [ ] 4.1.8 Verify bash -n passes
+- [x] 4.1.1 Add detect_strategy() function ✅ (completed: 2026-03-30 01:46)
+- [x] 4.1.2 Implement cmd_blue_green_prepare ✅ (completed: 2026-03-30 01:46)
+- [x] 4.1.3 Implement cmd_blue_green_switch ✅ (completed: 2026-03-30 01:46)
+- [x] 4.1.4 Refactor cmd_blue_green_deploy ✅ (completed: 2026-03-30 01:46)
+- [x] 4.1.5 Update cmd_rebuild for registry ✅ (completed: 2026-03-30 01:47)
+- [x] 4.1.6 Update cmd_rollback for registry ✅ (completed: 2026-03-30 01:47)
+- [x] 4.1.7 Update dispatcher and help ✅ (completed: 2026-03-30 01:48)
+- [x] 4.1.8 Verify bash -n passes ✅ (completed: 2026-03-30 01:48)
 
 ### Phase 5: Registry Deployment Templates
 - [ ] 5.1.1 Create in-place compose build partial
