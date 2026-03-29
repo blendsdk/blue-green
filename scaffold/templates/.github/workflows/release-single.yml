@@ -103,12 +103,13 @@ jobs:
           Host *
             StrictHostKeyChecking no
             UserKnownHostsFile /dev/null
+            LogLevel ERROR
           ${IDENTITY_LINE}
           EOF
 
           JUMP_HOST="${{ secrets.JUMP_HOST }}"
           if [ -n "$JUMP_HOST" ]; then
-            echo "  ProxyCommand ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -W %h:%p ${JUMP_HOST}" >> $SSH_CONFIG
+            echo "  ProxyCommand ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -W %h:%p ${JUMP_HOST}" >> $SSH_CONFIG
           fi
 
           chmod 600 $SSH_CONFIG
