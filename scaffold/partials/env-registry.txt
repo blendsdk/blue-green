@@ -1,0 +1,11 @@
+# -----------------------------------------------------------------------------
+# Docker Registry
+# -----------------------------------------------------------------------------
+# Registry URL where pre-built images are pushed/pulled
+REGISTRY_URL={{REGISTRY_URL}}
+
+# Image name (typically matches project name)
+IMAGE_NAME={{PROJECT_NAME_LOWER}}
+
+# Image tag — updated automatically by deploy CLI on each deploy
+IMAGE_TAG=latest

@@ -19,14 +19,14 @@
 # -----------------------------------------------------------------------------
 # Shared app configuration — YAML anchor for DRY service definitions
 # Note: YAML merge (<<:) replaces entire keys, so 'environment' must be
-# repeated in each service. The anchor still shares build, restart, deploy,
-# healthcheck, and networks configuration.
+# repeated in each service. The anchor still shares build/image, restart,
+# deploy, healthcheck, and networks configuration.
+# Build section is strategy-dependent:
+#   - In-place: build from local Dockerfile (build: context/dockerfile)
+#   - Registry: pull pre-built image (image: registry/name:tag)
 # -----------------------------------------------------------------------------
 x-app-base: &app-base
-  build:
-    context: .
-    dockerfile: Dockerfile
-  restart: always
+{{APP_BUILD_SECTION}}  restart: always
   environment:
     PORT: "{{APP_PORT}}"
     DEPLOY_ENV: "${DEPLOY_ENV:-development}"

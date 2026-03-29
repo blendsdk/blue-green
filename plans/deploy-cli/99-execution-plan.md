@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-03-30 01:49
-> **Progress**: 33/42 tasks (79%)
+> **Last Updated**: 2026-03-30 01:55
+> **Progress**: 38/42 tasks (90%)
 
 ## Overview
 
@@ -399,11 +399,11 @@ Implement a TypeScript deployment CLI that replaces bash-in-YAML orchestration, 
 - [x] 4.1.8 Verify bash -n passes ✅ (completed: 2026-03-30 01:48)
 
 ### Phase 5: Registry Deployment Templates
-- [ ] 5.1.1 Create in-place compose build partial
-- [ ] 5.1.2 Create registry compose build partial
-- [ ] 5.1.3 Create registry env partial
-- [ ] 5.1.4 Update docker-compose.yml template
-- [ ] 5.1.5 Update .env.example template
+- [x] 5.1.1 Create in-place compose build partial ✅ (completed: 2026-03-30 01:53)
+- [x] 5.1.2 Create registry compose build partial ✅ (completed: 2026-03-30 01:53)
+- [x] 5.1.3 Create registry env partial ✅ (completed: 2026-03-30 01:53)
+- [x] 5.1.4 Update docker-compose.yml template ✅ (completed: 2026-03-30 01:53)
+- [x] 5.1.5 Update .env.example template ✅ (completed: 2026-03-30 01:53)
 
 ### Phase 6: Workflow YAML Refactoring
 - [ ] 6.1.1 Refactor release-single.yml

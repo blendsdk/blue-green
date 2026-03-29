@@ -1,0 +1,1 @@
+  image: ${REGISTRY_URL}/${IMAGE_NAME}:${IMAGE_TAG}

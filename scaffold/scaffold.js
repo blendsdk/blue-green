@@ -337,6 +337,11 @@ function buildTemplateVars(answers) {
     ENTRYPOINT_ARRAY: answers.entrypoint.split(/\s+/).map(s => `"${s}"`).join(', '),
   };
 
+  // --- Docker Compose build strategy ---
+  // Default to in-place build (current behavior). Phase 7 will add strategy
+  // prompt and conditional logic for registry-based builds.
+  vars.APP_BUILD_SECTION = readPartial('compose-build-inplace.yml');
+
   // --- Docker Compose conditionals ---
   const services = [];
   const volumes = [];
@@ -376,6 +381,9 @@ function buildTemplateVars(answers) {
     : '';
 
   // --- .env.example conditionals ---
+  // Registry env vars are omitted for in-place strategy (default).
+  // Phase 7 will add strategy-conditional logic to include these for registry builds.
+  vars.ENV_REGISTRY_PARTIAL = '';
   vars.ENV_POSTGRES_PARTIAL = answers.postgres ? readPartial('env-postgres.txt') : '';
   vars.ENV_REDIS_PARTIAL = answers.redis ? readPartial('env-redis.txt') : '';
   vars.ENV_BACKUP_PARTIAL = answers.postgres ? readPartial('env-backup.txt') : '';
