@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-03-30 10:00
-> **Progress**: 61/61 tasks (Phase 8.2 complete — integration tests passed on real servers)
+> **Last Updated**: 2026-03-30 10:32
+> **Progress**: 66/66 tasks (ALL PHASES COMPLETE — Deploy CLI feature done)
 
 ## Overview
 
@@ -446,11 +446,26 @@ Implement a TypeScript deployment CLI that replaces bash-in-YAML orchestration, 
   - Fixed ScaffoldApp operations.yml: removed invalid options (health-check-all, deploy-config), added rebuild
 
 ### Phase 9: Documentation + Cleanup
-- [ ] 9.1.1 Update README.md
-- [ ] 9.1.2 Remove old script templates
-- [ ] 9.1.3 Clean up temp files
-- [ ] 9.1.4 End-to-end scaffold test
-- [ ] 9.1.5 Update .clinerules/project.md
+- [x] 9.1.1 Update README.md ✅ (completed: 2026-03-30 10:29)
+  - Added Deploy CLI section with commands, workflow examples, two-phase deploy, server inventory
+  - Updated "What Gets Generated" — removed old scripts, added deploy-cli.js
+  - Added deployment strategies section (in-place vs registry)
+  - Added Development section with build/test commands and project structure
+  - Updated architecture features, post-install setup, remote operations list
+- [x] 9.1.2 Remove old script templates ✅ (completed: 2026-03-30 10:27)
+  - Removed: deploy-config-files.sh, multi-deploy.sh, resolve-config.js, resolve-servers.js
+  - Remaining: deploy-cli.js, remote-ops.sh, health-check-wait.sh
+- [x] 9.1.3 Clean up temp files ✅ (completed: 2026-03-30 10:27)
+  - No temporary files found in project
+- [x] 9.1.4 End-to-end scaffold test ✅ (completed: 2026-03-30 10:29)
+  - Ran scaffold in non-interactive mode (in-place, single, no-postgres, no-redis)
+  - 33 files generated, all checks passed: deploy-cli.js present, remote-ops.sh bash -n passes
+  - No old scripts in output, no unresolved template placeholders
+- [x] 9.1.5 Update .clinerules/project.md ✅ (completed: 2026-03-30 10:31)
+  - Added Deploy CLI section, deployment strategies, updated toolchain
+  - Added TypeScript/Deploy CLI coding conventions, deploy-cli commit scope
+  - Updated project structure with src/deploy-cli/ and updated scaffold contents
+  - Added Deploy CLI rules (ESM bundle, SSH key optional, ProxyCommand, etc.)
 
 ---
 
