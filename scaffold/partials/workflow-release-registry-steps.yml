@@ -1,0 +1,31 @@
+
+      # Enable cross-platform builds (QEMU emulates non-native architectures)
+      # Required when CI runner arch differs from target servers (e.g., amd64 runner → arm64 servers)
+      - name: Set up QEMU for cross-platform builds
+        run: docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+
+      # Set up Docker Buildx — required for multi-platform builds and --push flag.
+      # Creates a "bluegreen" builder if it doesn't exist, then selects it.
+      - name: Set up Docker Buildx
+        run: docker buildx create --name bluegreen --use 2>/dev/null || docker buildx use bluegreen
+
+      # Build and push Docker image to private registry via buildx.
+      # Uses --push to stream directly to registry (no local image storage needed).
+      # For multi-platform builds, buildx creates a manifest list automatically.
+      - name: Build and push image to registry
+        run: |
+          echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login ${{ secrets.REGISTRY_URL }} -u ${{ secrets.REGISTRY_USER }} --password-stdin
+          node deployment/scripts/deploy-cli.js registry \
+            --registry-url ${{ secrets.REGISTRY_URL }} \
+            --image-name {{PROJECT_NAME_LOWER}} \
+            --tag latest \
+            --platform {{DOCKER_PLATFORM}} \
+            --deploy-path deployment
+
+      # Cleanup Docker build artifacts to prevent CI runner disk exhaustion.
+      # Runs even if push fails (if: always()) to prevent leftover layers.
+      - name: Cleanup Docker build artifacts
+        if: always()
+        run: |
+          docker image prune -f
+          docker buildx prune -f --filter until=24h 2>/dev/null || true

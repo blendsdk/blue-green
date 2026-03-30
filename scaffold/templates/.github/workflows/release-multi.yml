@@ -1,3 +1,21 @@
+# =============================================================================
+# {{PROJECT_NAME}} — Release (Multi-Server)
+# =============================================================================
+# Coordinated blue-green deployment across multiple servers per environment.
+# Three-job structure ensures atomic deploys with barrier pattern:
+#   1. build_and_test — build + test the application
+#   2. deploy_prepare — upload + prepare ALL servers (build/pull + health check)
+#   3. deploy_switch  — switch ALL servers (nginx swap) only if prepare succeeded
+#
+# The barrier is enforced by GitHub Actions job dependencies:
+#   deploy_switch depends on deploy_prepare — if ANY server fails prepare,
+#   the switch job never runs, preventing partial deploys.
+#
+# All deployment logic is handled by deploy-cli.js — YAML is orchestration only.
+# The CLI handles multi-server parallelism internally (--max-parallel flag).
+# Architecture: CI Runner → SSH → Remote Servers → remote-ops.sh
+# =============================================================================
+
 name: Release (Multi-Server)
 
 on:
@@ -22,7 +40,7 @@ on:
           - tag
           - server
       deploy_filter:
-        description: 'Filter value (group name, tag, or server name — required when scope is not "all")'
+        description: 'Filter value (required when scope is not "all")'
         required: false
         type: string
         default: ''
@@ -31,11 +49,13 @@ on:
         type: boolean
         default: false
 
+# One deploy per environment at a time — never run concurrent deploys
 concurrency:
   group: release-${{ inputs.deploy_target }}
   cancel-in-progress: false
 
 jobs:
+  # ── Build & Test ─────────────────────────────────────────────
   build_and_test:
     name: Build & Test
     runs-on: self-hosted
@@ -59,15 +79,14 @@ jobs:
         if: ${{ !inputs.skip_tests }}
         run: yarn test
 
-  prepare:
-    name: Prepare deployment
+  # ── Upload & Prepare ─────────────────────────────────────────
+  # Uploads code and prepares ALL target servers (build/pull + start + health).
+  # If ANY server fails preparation, this job fails and switch never runs.
+  deploy_prepare:
+    name: Upload & Prepare
     runs-on: self-hosted
-    timeout-minutes: 10
+    timeout-minutes: 30
     needs: [build_and_test]
-    outputs:
-      servers: ${{ steps.resolve.outputs.servers }}
-      count: ${{ steps.resolve.outputs.count }}
-      access_mode: ${{ steps.resolve.outputs.access_mode }}
     steps:
       - name: Clean workspace
         run: find . -mindepth 1 -delete 2>/dev/null || true
@@ -75,177 +94,68 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Resolve target servers
-        id: resolve
-        run: |
-          FILTER_ARG=""
-          if [ -n "${{ inputs.deploy_filter }}" ]; then
-            FILTER_ARG="--filter ${{ inputs.deploy_filter }}"
-          fi
-          RESOLVE_CMD="node deployment/scripts/resolve-servers.js --env ${{ inputs.deploy_target }} --scope ${{ inputs.deploy_scope }} ${FILTER_ARG}"
-
-          echo "servers=$($RESOLVE_CMD --format matrix)" >> $GITHUB_OUTPUT
-          echo "count=$($RESOLVE_CMD --format count)" >> $GITHUB_OUTPUT
-          echo "access_mode=$($RESOLVE_CMD --format access-mode)" >> $GITHUB_OUTPUT
-
-          echo "📋 Resolved ${{ inputs.deploy_target }}: $($RESOLVE_CMD --format count) servers"
-
-  # ── Direct SSH / Jump Host deploy (2-20 servers) ───────────
-  deploy-direct:
-    name: Deploy to ${{ matrix.name }}
-    runs-on: self-hosted
-    timeout-minutes: 20
-    needs: [prepare]
-    if: needs.prepare.outputs.access_mode != 'deploy_server'
-    strategy:
-      fail-fast: false
-      max-parallel: 5
-      matrix:
-        include: ${{ fromJSON(needs.prepare.outputs.servers) }}
-    steps:
-      - name: Clean workspace
-        run: find . -mindepth 1 -delete 2>/dev/null || true
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Resolve deploy path
-        run: echo "DEPLOY_PATH=${{ secrets.DEPLOY_PATH }}/${{ inputs.deploy_target }}" >> $GITHUB_ENV
-
-      - name: Install dependencies
+      - name: Install dependencies + build
         run: |
           npm install -g yarn
           yarn install --frozen-lockfile
+          yarn clean && yarn build
 
-      - name: Build
-        run: yarn clean && yarn build
+      # Create the deployment tarball (deployment-X.Y.Z.tgz)
+      # Both strategies need this — in-place uses it directly, registry needs
+      # the Dockerfile and app source for docker build context
+      - name: Create deployment package
+        run: ./deploy-package.sh
 
-      - name: Setup SSH
-        id: ssh
+      # --- Strategy-specific: registry build+push (empty for in-place) ---
+{{WORKFLOW_REGISTRY_STEPS}}
+      # Upload deployment files to ALL target servers
+      - name: Upload to all servers
+        run: |
+          node deployment/scripts/deploy-cli.js upload \
+            --env ${{ inputs.deploy_target }} \
+            --scope ${{ inputs.deploy_scope }} \
+            --filter "${{ inputs.deploy_filter }}" \
+            --deploy-path ${{ secrets.DEPLOY_PATH }}/${{ inputs.deploy_target }} \
+            --project-name {{PROJECT_NAME_LOWER}} {{UPLOAD_STRATEGY_FLAG}}
         env:
-          SSH_KEY_VALUE: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          JUMP_HOST: ${{ secrets.JUMP_HOST }}
+
+      # Deploy config files from GitHub secrets to ALL target servers
+      - name: Deploy config files to all servers
         run: |
-          SSH_CONFIG="/tmp/ssh-deploy-config"
-          IDENTITY_LINE=""
-
-          # Write SSH key from secret if provided (optional — skip if runner has pre-configured SSH)
-          if [ -n "$SSH_KEY_VALUE" ]; then
-            SSH_KEY="/tmp/ssh-deploy-key"
-            printf '%s\n' "$SSH_KEY_VALUE" > $SSH_KEY
-            chmod 600 $SSH_KEY
-            IDENTITY_LINE="  IdentityFile $SSH_KEY"
-          fi
-
-          cat > $SSH_CONFIG << EOF
-          Host *
-            StrictHostKeyChecking no
-            UserKnownHostsFile /dev/null
-            LogLevel ERROR
-          ${IDENTITY_LINE}
-          EOF
-
-          JUMP_HOST="${{ secrets.JUMP_HOST }}"
-          if [ -n "$JUMP_HOST" ]; then
-            echo "  ProxyCommand ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -W %h:%p ${JUMP_HOST}" >> $SSH_CONFIG
-          fi
-
-          chmod 600 $SSH_CONFIG
-          echo "ssh_config=$SSH_CONFIG" >> $GITHUB_OUTPUT
-
-      - name: Upload scripts
-        run: |
-          SSH_CONFIG="${{ steps.ssh.outputs.ssh_config }}"
-          REMOTE_HOST="${{ matrix.host }}"
-          REMOTE_PATH="${{ env.DEPLOY_PATH }}"
-
-          ssh -F $SSH_CONFIG ${REMOTE_HOST} "mkdir -p ${REMOTE_PATH}/scripts"
-          scp -F $SSH_CONFIG deployment/scripts/remote-ops.sh deployment/scripts/health-check-wait.sh ${REMOTE_HOST}:${REMOTE_PATH}/scripts/
-          ssh -F $SSH_CONFIG ${REMOTE_HOST} "chmod +x ${REMOTE_PATH}/scripts/*.sh"
-
-      - name: Setup remote directories
-        run: |
-          ssh -F ${{ steps.ssh.outputs.ssh_config }} ${{ matrix.host }} \
-            "${{ env.DEPLOY_PATH }}/scripts/remote-ops.sh setup-dirs"
-
-      - name: Deploy tarball
-        run: ./deploy-package.sh ${{ matrix.host }} ${{ secrets.JUMP_HOST }}
+          node deployment/scripts/deploy-cli.js deploy-config \
+            --env ${{ inputs.deploy_target }} \
+            --scope ${{ inputs.deploy_scope }} \
+            --filter "${{ inputs.deploy_filter }}" \
+            --deploy-path ${{ secrets.DEPLOY_PATH }}/${{ inputs.deploy_target }}
         env:
-          DEPLOY_PATH: ${{ env.DEPLOY_PATH }}
-
-      - name: Deploy Docker and Nginx configuration
-        run: |
-          SSH_CONFIG="${{ steps.ssh.outputs.ssh_config }}"
-          REMOTE_HOST="${{ matrix.host }}"
-          REMOTE_PATH="${{ env.DEPLOY_PATH }}"
-
-          scp -F $SSH_CONFIG deployment/Dockerfile deployment/docker-compose.yml ${REMOTE_HOST}:${REMOTE_PATH}/
-          ssh -F $SSH_CONFIG ${REMOTE_HOST} "mkdir -p ${REMOTE_PATH}/nginx/{conf.d,includes,locations,upstreams}"
-          scp -F $SSH_CONFIG deployment/nginx/nginx.conf ${REMOTE_HOST}:${REMOTE_PATH}/nginx/
-          scp -F $SSH_CONFIG deployment/nginx/conf.d/* ${REMOTE_HOST}:${REMOTE_PATH}/nginx/conf.d/
-          scp -F $SSH_CONFIG deployment/nginx/includes/* ${REMOTE_HOST}:${REMOTE_PATH}/nginx/includes/
-          scp -F $SSH_CONFIG deployment/nginx/locations/* ${REMOTE_HOST}:${REMOTE_PATH}/nginx/locations/
-          scp -F $SSH_CONFIG deployment/nginx/upstreams/blue-upstream.conf deployment/nginx/upstreams/green-upstream.conf ${REMOTE_HOST}:${REMOTE_PATH}/nginx/upstreams/
-          # Only seed active-upstream.conf on first deploy (preserve blue/green state)
-          ssh -F $SSH_CONFIG ${REMOTE_HOST} "test -f ${REMOTE_PATH}/nginx/upstreams/active-upstream.conf || cp ${REMOTE_PATH}/nginx/upstreams/blue-upstream.conf ${REMOTE_PATH}/nginx/upstreams/active-upstream.conf"
-
-      - name: Deploy config files from secrets
-        run: |
-          deployment/scripts/deploy-config-files.sh \
-            "${{ inputs.deploy_target }}" \
-            "${{ steps.ssh.outputs.ssh_config }}" \
-            "${{ matrix.host }}" \
-            "${{ env.DEPLOY_PATH }}"
-        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          JUMP_HOST: ${{ secrets.JUMP_HOST }}
           ALL_SECRETS: ${{ toJSON(secrets) }}
 
-      - name: Set deployment environment
+      # Prepare ALL servers: detect color → build/pull → start → health check
+      # Does NOT switch traffic — that's the switch job's responsibility
+      - name: Prepare all servers (build + health, no switch)
         run: |
-          SSH_CONFIG="${{ steps.ssh.outputs.ssh_config }}"
-          REMOTE_HOST="${{ matrix.host }}"
-          REMOTE_PATH="${{ env.DEPLOY_PATH }}"
+          node deployment/scripts/deploy-cli.js prepare \
+            --env ${{ inputs.deploy_target }} \
+            --scope ${{ inputs.deploy_scope }} \
+            --filter "${{ inputs.deploy_filter }}" \
+            --deploy-path ${{ secrets.DEPLOY_PATH }}/${{ inputs.deploy_target }}
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          JUMP_HOST: ${{ secrets.JUMP_HOST }}
 
-          # Resolve env_defaults from deploy-config.json
-          ENV_DEFAULTS=$(node deployment/scripts/resolve-config.js ${{ inputs.deploy_target }} --format env-defaults)
-
-          # Build the env update script
-          ENV_SCRIPT="
-            # Set DEPLOY_ENV
-            grep -q '^DEPLOY_ENV=' ${REMOTE_PATH}/.env 2>/dev/null && \
-              sed -i 's/^DEPLOY_ENV=.*/DEPLOY_ENV=${{ inputs.deploy_target }}/' ${REMOTE_PATH}/.env || \
-              echo 'DEPLOY_ENV=${{ inputs.deploy_target }}' >> ${REMOTE_PATH}/.env
-
-            # Set COMPOSE_PROJECT_NAME (project-env isolated)
-            grep -q '^COMPOSE_PROJECT_NAME=' ${REMOTE_PATH}/.env 2>/dev/null && \
-              sed -i 's/^COMPOSE_PROJECT_NAME=.*/COMPOSE_PROJECT_NAME={{PROJECT_NAME_LOWER}}-${{ inputs.deploy_target }}/' ${REMOTE_PATH}/.env || \
-              echo 'COMPOSE_PROJECT_NAME={{PROJECT_NAME_LOWER}}-${{ inputs.deploy_target }}' >> ${REMOTE_PATH}/.env
-          "
-
-          # Add env_defaults (only if not already set — secrets .env takes priority)
-          while IFS='=' read -r key value; do
-            [ -z "$key" ] && continue
-            ENV_SCRIPT="$ENV_SCRIPT
-            grep -q '^${key}=' ${REMOTE_PATH}/.env 2>/dev/null || echo '${key}=${value}' >> ${REMOTE_PATH}/.env"
-          done <<< "$ENV_DEFAULTS"
-
-          ssh -F $SSH_CONFIG ${REMOTE_HOST} "$ENV_SCRIPT"
-
-      - name: Blue-green deploy
-        run: |
-          ssh -F ${{ steps.ssh.outputs.ssh_config }} ${{ matrix.host }} \
-            "${{ env.DEPLOY_PATH }}/scripts/remote-ops.sh blue-green-deploy"
-
-      - name: Post-deploy health check
-        run: |
-          ssh -F ${{ steps.ssh.outputs.ssh_config }} ${{ matrix.host }} \
-            "${{ env.DEPLOY_PATH }}/scripts/remote-ops.sh wait-healthy 120"
-
-  # ── Deployment server fan-out (20+ servers) ────────────────
-  deploy-via-server:
-    name: Deploy via deployment server
+  # ── Switch ───────────────────────────────────────────────────
+  # Switches ALL servers simultaneously (nginx upstream swap + reload).
+  # This job only runs if deploy_prepare succeeded for ALL servers.
+  # The switch itself is fast (~seconds) — just nginx config swap + reload.
+  deploy_switch:
+    name: Switch all servers
     runs-on: self-hosted
-    timeout-minutes: 60
-    needs: [prepare]
-    if: needs.prepare.outputs.access_mode == 'deploy_server'
+    timeout-minutes: 5
+    needs: [deploy_prepare]
     steps:
       - name: Clean workspace
         run: find . -mindepth 1 -delete 2>/dev/null || true
@@ -253,57 +163,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      # Switch ALL servers: swap nginx upstream → reload → verify → stop old
+      - name: Switch all servers (nginx swap only)
         run: |
-          npm install -g yarn
-          yarn install --frozen-lockfile
-
-      - name: Build
-        run: yarn clean && yarn build
-
-      - name: Setup SSH to deployment server
-        id: ssh
+          node deployment/scripts/deploy-cli.js switch \
+            --env ${{ inputs.deploy_target }} \
+            --scope ${{ inputs.deploy_scope }} \
+            --filter "${{ inputs.deploy_filter }}" \
+            --deploy-path ${{ secrets.DEPLOY_PATH }}/${{ inputs.deploy_target }}
         env:
-          SSH_KEY_VALUE: ${{ secrets.SSH_PRIVATE_KEY }}
-        run: |
-          SSH_CONFIG="/tmp/ssh-deploy-config"
-          IDENTITY_LINE=""
-
-          # Write SSH key from secret if provided (optional — skip if runner has pre-configured SSH)
-          if [ -n "$SSH_KEY_VALUE" ]; then
-            SSH_KEY="/tmp/ssh-deploy-key"
-            printf '%s\n' "$SSH_KEY_VALUE" > $SSH_KEY
-            chmod 600 $SSH_KEY
-            IDENTITY_LINE="  IdentityFile $SSH_KEY"
-          fi
-
-          cat > $SSH_CONFIG << EOF
-          Host *
-            StrictHostKeyChecking no
-            UserKnownHostsFile /dev/null
-            LogLevel ERROR
-          ${IDENTITY_LINE}
-          EOF
-          chmod 600 $SSH_CONFIG
-          echo "ssh_config=$SSH_CONFIG" >> $GITHUB_OUTPUT
-
-      - name: Upload deployment package + scripts to deploy server
-        run: |
-          SSH_CONFIG="${{ steps.ssh.outputs.ssh_config }}"
-          DEPLOY_SERVER="${{ secrets.DEPLOY_SERVER }}"
-          REMOTE_PATH="${{ secrets.DEPLOY_PATH }}"
-
-          # Upload everything needed for fan-out
-          ssh -F $SSH_CONFIG ${DEPLOY_SERVER} "mkdir -p ${REMOTE_PATH}/deployment/scripts"
-          ./deploy-package.sh ${DEPLOY_SERVER}
-          scp -F $SSH_CONFIG deployment/scripts/* ${DEPLOY_SERVER}:${REMOTE_PATH}/deployment/scripts/
-          scp -F $SSH_CONFIG deploy-inventory.json ${DEPLOY_SERVER}:${REMOTE_PATH}/
-          ssh -F $SSH_CONFIG ${DEPLOY_SERVER} "chmod +x ${REMOTE_PATH}/deployment/scripts/*.sh"
-
-      - name: Fan-out deploy to all servers
-        run: |
-          ssh -F ${{ steps.ssh.outputs.ssh_config }} ${{ secrets.DEPLOY_SERVER }} \
-            "${{ secrets.DEPLOY_PATH }}/deployment/scripts/multi-deploy.sh \
-              --env ${{ inputs.deploy_target }} \
-              --scope ${{ inputs.deploy_scope }} \
-              --filter '${{ inputs.deploy_filter }}'"
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          JUMP_HOST: ${{ secrets.JUMP_HOST }}

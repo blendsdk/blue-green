@@ -1,0 +1,18 @@
+{
+  "name": "blue-green-template",
+  "version": "1.0.0",
+  "description": "Blue-green deployment template with Deploy CLI for BlendSDK/WebAFX applications",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:cli": "node esbuild.config.mjs",
+    "typecheck": "tsc --noEmit",
+    "test:cli": "node --experimental-strip-types --test src/deploy-cli/__tests__/*.test.ts",
+    "verify": "tsc --noEmit && node esbuild.config.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "typescript": "^5.8.0",
+    "@types/node": "^22.0.0"
+  }
+}

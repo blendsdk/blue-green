@@ -1,0 +1,28 @@
+{
+  "ssh_key_secret": "DEPLOY_SSH_KEY",
+  "environments": {
+    "test": {
+      "access": "direct",
+      "servers": [
+        { "name": "test-01", "host": "deploy@10.0.1.30", "group": "all" }
+      ]
+    },
+    "acceptance": {
+      "access": "jump_host",
+      "jump_host_secret": "JUMP_HOST",
+      "servers": [
+        { "name": "acc-01", "host": "deploy@10.0.2.10", "group": "web" },
+        { "name": "acc-02", "host": "deploy@10.0.2.20", "group": "web" },
+        { "name": "acc-api-01", "host": "deploy@10.0.2.30", "group": "api", "tags": ["primary"] }
+      ]
+    },
+    "production": {
+      "access": "direct",
+      "servers": [
+        { "name": "prod-01", "host": "deploy@10.0.3.10", "group": "web", "tags": ["eu-west", "primary"] },
+        { "name": "prod-02", "host": "deploy@10.0.3.20", "group": "web", "tags": ["eu-west"] },
+        { "name": "prod-03", "host": "deploy@10.0.3.30", "group": "api", "tags": ["eu-west"] }
+      ]
+    }
+  }
+}

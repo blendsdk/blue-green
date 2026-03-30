@@ -66,6 +66,9 @@ function parseArgs() {
       case '--no-postgres':   flags.postgres = false; break;
       case '--with-redis':    flags.redis = true; break;
       case '--no-redis':      flags.redis = false; break;
+      case '--strategy':      flags.strategy = args[++i]; break;
+      case '--registry-url':  flags.registryUrl = args[++i]; break;
+      case '--platform':      flags.platform = args[++i]; break;
       case '--single':        flags.topology = 'single'; break;
       case '--multi':         flags.topology = 'multi'; break;
       case '--force':         flags.force = true; break;
@@ -117,6 +120,9 @@ Flags:
   --no-postgres         Exclude PostgreSQL
   --with-redis          Include Redis
   --no-redis            Exclude Redis (default)
+  --strategy <type>     Deployment strategy: in-place (default) or registry
+  --registry-url <url>  Docker registry URL (required for registry strategy)
+  --platform <platform> Target platform(s) for Docker builds (e.g., linux/arm64)
   --single              Single-server deployment topology
   --multi               Multi-server deployment topology
   --force               Overwrite existing files without asking
@@ -126,6 +132,7 @@ Flags:
 Examples:
   node scaffold.js --name my-app --port 3000 --with-postgres --single
   node scaffold.js --name my-api --port 4000 --with-postgres --with-redis --multi --force
+  node scaffold.js --name my-svc --port 3000 --strategy registry --registry-url registry.internal:5000 --single
 `);
   process.exit(0);
 }
@@ -243,6 +250,33 @@ async function runInteractivePrompts() {
     const postgres = await confirm(rl, 'Include PostgreSQL?', true);
     const redis = await confirm(rl, 'Include Redis?', false);
 
+    // --- Deployment strategy ---
+    console.log('\n── Deployment Strategy ────────────────────────');
+    const strategyChoice = await choose(rl, 'Deployment strategy:', [
+      'in-place — Build Docker image on each server (simple, no registry needed)',
+      'registry — Build once, push to registry, all servers pull (faster, consistent)',
+    ], 0);
+    const strategy = strategyChoice === 0 ? 'in-place' : 'registry';
+
+    // Registry URL and platform are only needed for registry strategy
+    let registryUrl = '';
+    let platform = '';
+    if (strategy === 'registry') {
+      registryUrl = await ask(rl, 'Docker registry URL (e.g., registry.internal:5000)');
+
+      // Platform prompt — determines target architecture for Docker builds.
+      // When CI runner arch differs from server arch (e.g., amd64 → arm64),
+      // QEMU + buildx handle cross-compilation automatically.
+      const platformChoice = await choose(rl, 'Target platform(s) for Docker builds:', [
+        'linux/amd64              (x86 servers)',
+        'linux/arm64              (ARM servers)',
+        'linux/amd64,linux/arm64  (mixed fleet — builds both architectures)',
+        'Custom',
+      ], 0);
+      const presets = ['linux/amd64', 'linux/arm64', 'linux/amd64,linux/arm64'];
+      platform = platformChoice < 3 ? presets[platformChoice] : await ask(rl, 'Custom platform(s)');
+    }
+
     // --- Deployment topology ---
     console.log('\n── Deployment Topology ────────────────────────');
     const topologyChoice = await choose(rl, 'Deployment topology:', [
@@ -251,7 +285,7 @@ async function runInteractivePrompts() {
     ], 0);
     const topology = topologyChoice === 0 ? 'single' : 'multi';
 
-    return { name, appPort, nginxPort, appReplicas, entrypoint, postgres, redis, topology };
+    return { name, appPort, nginxPort, appReplicas, entrypoint, postgres, redis, strategy, registryUrl, platform, topology };
   } finally {
     rl.close();
   }
@@ -264,6 +298,20 @@ async function runInteractivePrompts() {
  * @returns {object} User answers object
  */
 function answersFromFlags(flags) {
+  const strategy = flags.strategy || 'in-place';
+
+  // Validate strategy value to catch typos early
+  if (strategy !== 'in-place' && strategy !== 'registry') {
+    console.error(`❌ Invalid --strategy value: "${strategy}". Must be "in-place" or "registry".`);
+    process.exit(1);
+  }
+
+  // Registry URL is required when strategy is registry
+  if (strategy === 'registry' && !flags.registryUrl) {
+    console.error('❌ --registry-url is required when --strategy is "registry".');
+    process.exit(1);
+  }
+
   return {
     name: flags.name,
     appPort: flags.port || DEFAULTS.appPort,
@@ -272,6 +320,9 @@ function answersFromFlags(flags) {
     entrypoint: flags.entry || DEFAULTS.entrypoint,
     postgres: flags.postgres !== undefined ? flags.postgres : true,
     redis: flags.redis !== undefined ? flags.redis : false,
+    strategy,
+    registryUrl: flags.registryUrl || '',
+    platform: flags.platform || '',
     topology: flags.topology || 'single',
   };
 }
@@ -337,6 +388,19 @@ function buildTemplateVars(answers) {
     ENTRYPOINT_ARRAY: answers.entrypoint.split(/\s+/).map(s => `"${s}"`).join(', '),
   };
 
+  // --- Docker Compose build strategy ---
+  // Select build partial based on deployment strategy choice.
+  // In-place: builds Docker image on each server using local Dockerfile.
+  // Registry: pulls pre-built image from a Docker registry.
+  const isRegistry = answers.strategy === 'registry';
+  vars.APP_BUILD_SECTION = isRegistry
+    ? readPartial('compose-build-registry.yml')
+    : readPartial('compose-build-inplace.yml');
+
+  // Registry-specific variables used in env-registry.txt partial and workflows
+  vars.REGISTRY_URL = answers.registryUrl || '';
+  vars.IMAGE_NAME = vars.PROJECT_NAME_LOWER;
+
   // --- Docker Compose conditionals ---
   const services = [];
   const volumes = [];
@@ -376,6 +440,8 @@ function buildTemplateVars(answers) {
     : '';
 
   // --- .env.example conditionals ---
+  // Registry env vars are included only for registry strategy
+  vars.ENV_REGISTRY_PARTIAL = isRegistry ? readPartial('env-registry.txt') : '';
   vars.ENV_POSTGRES_PARTIAL = answers.postgres ? readPartial('env-postgres.txt') : '';
   vars.ENV_REDIS_PARTIAL = answers.redis ? readPartial('env-redis.txt') : '';
   vars.ENV_BACKUP_PARTIAL = answers.postgres ? readPartial('env-backup.txt') : '';
@@ -399,9 +465,19 @@ function buildTemplateVars(answers) {
   vars.OPERATIONS_DATABASE_OPTIONS = answers.postgres
     ? readPartial('operations-database-options.yml')
     : '';
-  vars.OPERATIONS_DATABASE_STEPS = answers.postgres
-    ? readPartial('operations-database-steps.yml')
+  // Note: OPERATIONS_DATABASE_STEPS partial exists but is no longer referenced
+  // by workflow templates — the deploy CLI `operate` command handles all
+  // operations dynamically. Kept for backward compatibility if needed.
+
+  // --- GitHub Actions workflow conditionals (registry vs in-place) ---
+  // DOCKER_PLATFORM: target platform for buildx (e.g., "linux/arm64")
+  vars.DOCKER_PLATFORM = answers.platform || '';
+  // WORKFLOW_REGISTRY_STEPS: QEMU + buildx + login + push block (empty for in-place)
+  vars.WORKFLOW_REGISTRY_STEPS = isRegistry
+    ? readPartial('workflow-release-registry-steps.yml')
     : '';
+  // UPLOAD_STRATEGY_FLAG: appended to upload command (empty for in-place)
+  vars.UPLOAD_STRATEGY_FLAG = isRegistry ? '--strategy registry' : '';
 
   // --- SECRETS-SETUP.md config secrets table ---
   vars.CONFIG_SECRETS_TABLE = buildConfigSecretsTable(answers);
@@ -492,16 +568,12 @@ function buildFileList(answers) {
   }
 
   // --- Scripts (always) ---
+  // deploy-cli.js replaces the old deploy-config-files.sh, multi-deploy.sh,
+  // resolve-config.js, and resolve-servers.js scripts. It handles all
+  // deployment orchestration from CI runners via SSH.
+  add('deployment/scripts/deploy-cli.js', 'deployment/scripts/deploy-cli.js');
   add('deployment/scripts/remote-ops.sh', 'deployment/scripts/remote-ops.sh', true);
   add('deployment/scripts/health-check-wait.sh', 'deployment/scripts/health-check-wait.sh', true);
-  add('deployment/scripts/deploy-config-files.sh', 'deployment/scripts/deploy-config-files.sh', true);
-  add('deployment/scripts/resolve-config.js', 'deployment/scripts/resolve-config.js');
-
-  // --- Multi-server scripts (only if multi topology) ---
-  if (answers.topology === 'multi') {
-    add('deployment/scripts/resolve-servers.js', 'deployment/scripts/resolve-servers.js');
-    add('deployment/scripts/multi-deploy.sh', 'deployment/scripts/multi-deploy.sh', true);
-  }
 
   // --- Deploy package + push-secrets (always) ---
   add('deploy-package.sh', 'deploy-package.sh', true);
@@ -734,6 +806,10 @@ function printSummary(results, answers) {
   if (dryRun.length > 0) console.log(`   🔍 ${dryRun.length} would be created (dry run)`);
 
   // --- Configuration summary ---
+  const strategyLabel = answers.strategy === 'registry'
+    ? `registry (push to ${answers.registryUrl})`
+    : 'in-place (build on each server)';
+
   console.log('\n📋 Configuration:');
   console.log(`   Project:    ${answers.name}`);
   console.log(`   App Port:   ${answers.appPort}`);
@@ -741,6 +817,10 @@ function printSummary(results, answers) {
   console.log(`   Replicas:   ${answers.appReplicas}`);
   console.log(`   PostgreSQL: ${answers.postgres ? '✅ Yes' : '❌ No'}`);
   console.log(`   Redis:      ${answers.redis ? '✅ Yes' : '❌ No'}`);
+  console.log(`   Strategy:   ${strategyLabel}`);
+  if (answers.platform) {
+    console.log(`   Platform:   ${answers.platform}`);
+  }
   console.log(`   Topology:   ${answers.topology === 'single' ? 'Single server' : 'Multi server'}`);
 
   // --- Skipped files detail ---
@@ -749,6 +829,15 @@ function printSummary(results, answers) {
     for (const r of skipped) {
       console.log(`   - ${r.dest}`);
     }
+  }
+
+  // --- Registry setup notes (only for registry strategy) ---
+  if (answers.strategy === 'registry') {
+    console.log('\n⚠️  Registry setup required:');
+    console.log(`   1. Run Docker registry on your registry host (${answers.registryUrl})`);
+    console.log(`   2. Add "insecure-registries": ["${answers.registryUrl}"]`);
+    console.log('      to /etc/docker/daemon.json on all hosts');
+    console.log('   3. Restart Docker on all hosts: sudo systemctl restart docker');
   }
 
   // --- Next steps ---

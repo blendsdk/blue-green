@@ -14,8 +14,10 @@
 # Deploy Commands:
 #   setup-dirs             Create directory structure for deployment
 #   receive-deploy         Copy tarball into Docker build context
-#   blue-green-deploy      Full zero-downtime deploy (build → health → switch)
-#   rebuild                Rebuild current active color (docker compose up --build -d)
+#   blue-green-prepare     Build/pull + start + health check (no traffic switch)
+#   blue-green-switch      Switch nginx to prepared color + stop old + cleanup
+#   blue-green-deploy      Full deploy (prepare + switch in one step)
+#   rebuild                Rebuild current active color containers
 #
 # Blue-Green Commands:
 #   switch-color [color]   Manual blue↔green switch without rebuild
@@ -27,7 +29,7 @@
 #   health-check           Full health check (containers + app + db)
 #   wait-healthy [secs]    Loop health check until healthy (default: 120)
 #   view-logs [lines]      Show last N app log lines (default: 200)
-#   rollback               Revert to previous tarball + blue-green deploy
+#   rollback               Revert to previous version (strategy-aware)
 #
 # Database Commands (PostgreSQL):
 #   backup                 Trigger database backup
@@ -129,6 +131,45 @@ wait_for_service() {
   fi
 }
 
+# ── Strategy Detection ───────────────────────────────────────
+
+# Detect deployment strategy from docker-compose.yml.
+# If app services use "image:" with registry/tag variables → registry strategy (pull).
+# If app services use "build:" → in-place strategy (build from tarball).
+# Returns: "registry" or "in-place" via stdout.
+detect_strategy() {
+  local compose_file="${DEPLOY_PATH}/docker-compose.yml"
+
+  # Look for image references that use registry variables (IMAGE_TAG, REGISTRY_URL, etc.)
+  if grep -q '^\s*image:.*\${\?\(IMAGE_TAG\|REGISTRY\)' "$compose_file" 2>/dev/null; then
+    echo "registry"
+  else
+    echo "in-place"
+  fi
+}
+
+# Login to Docker registry using credentials from .env file.
+# Called automatically before pull operations in registry strategy.
+# Reads REGISTRY_URL, REGISTRY_USER, REGISTRY_PASSWORD from .env.
+registry_login() {
+  local env_file="${DEPLOY_PATH}/.env"
+
+  # Source registry credentials from .env
+  local reg_url reg_user reg_pass
+  reg_url=$(grep -oP '^REGISTRY_URL=\K.*' "$env_file" 2>/dev/null || true)
+  reg_user=$(grep -oP '^REGISTRY_USER=\K.*' "$env_file" 2>/dev/null || true)
+  reg_pass=$(grep -oP '^REGISTRY_PASSWORD=\K.*' "$env_file" 2>/dev/null || true)
+
+  if [[ -z "$reg_url" || -z "$reg_user" || -z "$reg_pass" ]]; then
+    log_error "Registry credentials incomplete in ${env_file}"
+    log_error "Required: REGISTRY_URL, REGISTRY_USER, REGISTRY_PASSWORD"
+    return 1
+  fi
+
+  echo "  Logging into registry ${reg_url}..."
+  echo "$reg_pass" | docker login "$reg_url" -u "$reg_user" --password-stdin 2>/dev/null
+}
+
 # ── Deploy Commands ──────────────────────────────────────────
 
 # Create the full directory structure needed for deployment.
@@ -165,23 +206,21 @@ cmd_receive_deploy() {
   log_info "Deployment prepared at ${DEPLOY_PATH}"
 }
 
-# Full zero-downtime blue-green deploy.
-# This is the core deployment algorithm:
+# Two-phase blue-green deployment: PREPARE phase.
+# Executes the slow, variable-time portion of deployment:
 #   1. Detect current active color
-#   2. Target = opposite color (or --force-color)
-#   3. Ensure tarball is in build context
-#   4. Build target color image
-#   5. Start target replicas
-#   6. Wait for all replicas to be healthy
-#   7. Switch Nginx upstream to target color
-#   8. Reload Nginx (graceful — no dropped connections)
-#   9. Verify traffic reaches target color
-#  10. Stop old color replicas
-#  11. Docker cleanup
+#   2. Determine target color (opposite, or --force-color)
+#   3. Detect strategy and build (in-place) or pull (registry)
+#   4. Start core services + target replicas
+#   5. Wait for health checks to pass
+#   6. Write target color to state file for switch phase
+#
+# On failure, tears down target replicas and aborts — no traffic is switched.
+# The CLI calls this via SSH on each server independently.
 #
 # Arguments:
 #   --force-color <color>  Force deploy to a specific color
-cmd_blue_green_deploy() {
+cmd_blue_green_prepare() {
   local force_color=""
 
   # Parse arguments
@@ -199,17 +238,17 @@ cmd_blue_green_deploy() {
   done
 
   echo "========================================="
-  echo "  Blue-Green Deployment"
+  echo "  Blue-Green Prepare"
   echo "========================================="
 
   # Step 1: Detect current color
-  log_step "1/11" "Detecting current active color..."
+  log_step "1/6" "Detecting current active color..."
   local current_color
   current_color=$(detect_active_color)
   echo "  Current active: ${current_color}"
 
   # Step 2: Determine target color
-  log_step "2/11" "Determining target color..."
+  log_step "2/6" "Determining target color..."
   local target_color
   if [[ -n "$force_color" ]]; then
     target_color="$force_color"
@@ -218,26 +257,39 @@ cmd_blue_green_deploy() {
   fi
   echo "  Target: ${target_color}"
 
-  # Step 3: Ensure tarball is in build context
-  log_step "3/11" "Verifying deployment tarball..."
-  if [[ ! -f "${DEPLOY_PATH}/deployment-latest.tgz" ]]; then
-    log_error "deployment-latest.tgz not found"
-    return 1
+  # Step 3: Detect strategy and build/pull the target image
+  local strategy
+  strategy=$(detect_strategy)
+  log_step "3/6" "Strategy: ${strategy}"
+
+  if [[ "$strategy" == "registry" ]]; then
+    # Registry strategy: login + pull pre-built image from registry
+    log_step "3/6" "Pulling app_${target_color} image..."
+    registry_login
+    if ! dc pull "app_${target_color}"; then
+      log_error "Pull failed for app_${target_color}"
+      return 2
+    fi
+  else
+    # In-place strategy: build from tarball uploaded to server
+    log_step "3/6" "Verifying deployment tarball..."
+    if [[ ! -f "${DEPLOY_PATH}/deployment-latest.tgz" ]]; then
+      log_error "deployment-latest.tgz not found"
+      return 1
+    fi
+    log_step "3/6" "Building app_${target_color} image..."
+    if ! dc build "app_${target_color}"; then
+      log_error "Build failed for app_${target_color}"
+      return 2
+    fi
   fi
 
-  # Step 4: Build target color image
-  log_step "4/11" "Building app_${target_color} image..."
-  if ! dc build "app_${target_color}"; then
-    log_error "Build failed for app_${target_color}"
-    return 2
-  fi
-
-  # Step 5: Start core services (nginx) + target replicas
-  log_step "5/11" "Starting core services and app_${target_color} replicas..."
+  # Step 4: Start core services (nginx, postgres, redis) + target replicas
+  log_step "4/6" "Starting core services and app_${target_color} replicas..."
   dc --profile core --profile "${target_color}" up -d
 
-  # Step 6: Wait for health checks
-  log_step "6/11" "Waiting for app_${target_color} health checks..."
+  # Step 5: Wait for health checks
+  log_step "5/6" "Waiting for app_${target_color} health checks..."
   if ! wait_for_service "app_${target_color}" 120; then
     log_error "Health checks failed for app_${target_color}"
     echo "Aborting — tearing down ${target_color} replicas..." >&2
@@ -245,20 +297,65 @@ cmd_blue_green_deploy() {
     return 3
   fi
 
-  # Step 7: Switch Nginx upstream
-  log_step "7/11" "Switching Nginx upstream to ${target_color}..."
+  # Step 6: Write target color to state file (for switch phase to read)
+  # This is the coordination mechanism between prepare and switch phases.
+  log_step "6/6" "Saving prepare state..."
+  echo "${target_color}" > "${DEPLOY_PATH}/.prepared-color"
+
+  echo ""
+  echo "========================================="
+  echo "  Prepare complete!"
+  echo "  Ready to switch to: ${target_color}"
+  echo "  Run 'remote-ops.sh blue-green-switch' to activate"
+  echo "========================================="
+}
+
+# Two-phase blue-green deployment: SWITCH phase.
+# Executes the fast, near-instant traffic switch:
+#   1. Switch Nginx upstream to the prepared color
+#   2. Reload Nginx (graceful — no dropped connections)
+#   3. Verify traffic reaches the new color
+#   4. Stop old color replicas
+#   5. Docker cleanup + remove state file
+#
+# Reads the target color from the state file written by prepare.
+# If no state file exists (manual use), switches to opposite of current.
+cmd_blue_green_switch() {
+  echo "========================================="
+  echo "  Blue-Green Switch"
+  echo "========================================="
+
+  # Read prepared color from state file (written by blue-green-prepare)
+  local target_color
+  local state_file="${DEPLOY_PATH}/.prepared-color"
+
+  if [[ -f "$state_file" ]]; then
+    target_color=$(cat "$state_file")
+  else
+    # Fallback: switch to opposite of current (for manual/standalone use)
+    local fallback_current
+    fallback_current=$(detect_active_color)
+    target_color=$(get_opposite_color "$fallback_current")
+    log_warn "No prepare state found — switching to ${target_color}"
+  fi
+
+  local current_color
+  current_color=$(detect_active_color)
+
+  # Step 1: Switch Nginx upstream config to target color
+  log_step "1/5" "Switching Nginx upstream to ${target_color}..."
   local upstream_dir="${DEPLOY_PATH}/nginx/upstreams"
   cp "${upstream_dir}/${target_color}-upstream.conf" "${upstream_dir}/active-upstream.conf"
 
-  # Step 8: Reload Nginx (graceful — zero-downtime)
-  log_step "8/11" "Reloading Nginx..."
+  # Step 2: Reload Nginx (graceful — zero-downtime)
+  log_step "2/5" "Reloading Nginx..."
   if ! dc exec nginx nginx -s reload; then
     log_error "Nginx reload failed"
     return 4
   fi
 
-  # Step 9: Verify traffic reaches new color
-  log_step "9/11" "Verifying traffic reaches ${target_color}..."
+  # Step 3: Verify traffic reaches the new color via health endpoint
+  log_step "3/5" "Verifying traffic reaches ${target_color}..."
   local max_attempts=5
   local attempt=0
   local verified=false
@@ -280,33 +377,61 @@ cmd_blue_green_deploy() {
     log_warn "Could not verify traffic on ${target_color} (may still be working)"
   fi
 
-  # Step 10: Stop old color (only if different from target)
+  # Step 4: Stop old color replicas (only if different from target)
   if [[ "$current_color" != "$target_color" ]]; then
-    log_step "10/11" "Stopping old ${current_color} replicas..."
+    log_step "4/5" "Stopping old ${current_color} replicas..."
     dc --profile "${current_color}" stop
   else
-    log_step "10/11" "Same color restart — skipping stop step"
+    log_step "4/5" "Same color restart — skipping stop step"
   fi
 
-  # Step 11: Docker cleanup
-  log_step "11/11" "Docker cleanup..."
+  # Step 5: Docker cleanup + remove state file
+  log_step "5/5" "Docker cleanup..."
   docker system prune -f --filter "until=24h" 2>/dev/null || true
+  rm -f "${DEPLOY_PATH}/.prepared-color"
 
   echo ""
   echo "========================================="
-  echo "  Deployment complete!"
+  echo "  Switch complete!"
   echo "  Active: ${target_color}"
   echo "========================================="
 }
 
+# Full zero-downtime blue-green deploy (backward-compatible convenience wrapper).
+# Runs both phases sequentially: prepare → switch.
+# For multi-server coordinated deploys, the CLI calls prepare and switch
+# separately with a barrier in between (all servers prepare → all switch).
+#
+# Arguments:
+#   --force-color <color>  Force deploy to a specific color
+cmd_blue_green_deploy() {
+  # Phase 1: Prepare (build/pull → start → health check)
+  cmd_blue_green_prepare "$@" || return $?
+
+  # Phase 2: Switch (nginx swap → stop old → cleanup)
+  cmd_blue_green_switch
+}
+
 # Rebuild current active color containers.
-# Uses --build to force Docker to rebuild with the latest tarball.
+# Strategy-aware: uses --build for in-place, or pull for registry.
 cmd_rebuild() {
   local current_color
   current_color=$(detect_active_color)
+  local strategy
+  strategy=$(detect_strategy)
 
-  echo "Rebuilding ${current_color} containers..."
-  dc --profile "${current_color}" up --build -d
+  echo "Rebuilding ${current_color} containers (strategy: ${strategy})..."
+
+  if [[ "$strategy" == "registry" ]]; then
+    # Registry strategy: login + pull latest image then recreate containers
+    registry_login
+    dc pull "app_${current_color}"
+    dc --profile "${current_color}" up -d
+  else
+    # In-place strategy: rebuild from local tarball
+    dc --profile "${current_color}" up --build -d
+  fi
+
   log_info "Containers rebuilt and restarted (${current_color})"
 }
 
@@ -406,11 +531,24 @@ cmd_view_logs() {
   dc logs --tail="${lines}" "app_${current_color}"
 }
 
-# Rollback to the previous deployment tarball.
+# Strategy-aware rollback dispatcher.
+# Detects the deployment strategy and delegates to the appropriate rollback method.
+cmd_rollback() {
+  local strategy
+  strategy=$(detect_strategy)
+
+  if [[ "$strategy" == "registry" ]]; then
+    cmd_rollback_registry
+  else
+    cmd_rollback_inplace
+  fi
+}
+
+# Rollback for in-place (tarball) strategy.
 # Finds the second-most-recent tarball, re-links it as latest,
 # then performs a full blue-green deploy with the old version.
-cmd_rollback() {
-  echo "Rolling back to previous deployment..."
+cmd_rollback_inplace() {
+  echo "Rolling back to previous deployment (in-place)..."
 
   cd "${DEPLOY_PATH}"
 
@@ -440,6 +578,36 @@ cmd_rollback() {
   cmd_blue_green_deploy
 }
 
+# Rollback for registry strategy.
+# Reads the previous image tag from a state file (.previous-image-tag),
+# updates .env with it, then performs a full blue-green deploy.
+# The state file is written by the CLI's registry command before each deploy.
+cmd_rollback_registry() {
+  echo "Rolling back to previous image (registry)..."
+
+  local prev_tag_file="${DEPLOY_PATH}/.previous-image-tag"
+
+  if [[ ! -f "$prev_tag_file" ]]; then
+    log_error "No previous image tag recorded. Cannot rollback."
+    log_error "File not found: ${prev_tag_file}"
+    return 1
+  fi
+
+  local prev_tag
+  prev_tag=$(cat "$prev_tag_file")
+  echo "Rolling back to image tag: ${prev_tag}"
+
+  # Update .env with the previous image tag
+  if grep -q "^IMAGE_TAG=" "${DEPLOY_PATH}/.env" 2>/dev/null; then
+    sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=${prev_tag}/" "${DEPLOY_PATH}/.env"
+  else
+    echo "IMAGE_TAG=${prev_tag}" >> "${DEPLOY_PATH}/.env"
+  fi
+
+  # Perform a full blue-green deploy with the rolled-back image
+  cmd_blue_green_deploy
+}
+
 # ── Database Commands ────────────────────────────────────────
 
 # {{DATABASE_COMMANDS_PARTIAL}}
@@ -456,7 +624,10 @@ Usage: remote-ops.sh <command> [options]
 Deploy Commands:
   setup-dirs             Create directory structure for deployment
   receive-deploy         Copy tarball into Docker build context
-  blue-green-deploy      Full zero-downtime deploy (build → health → switch)
+  blue-green-prepare     Build/pull + start + health check (no traffic switch)
+    --force-color COLOR  Force deploy to a specific color (blue or green)
+  blue-green-switch      Switch nginx to prepared color + stop old + cleanup
+  blue-green-deploy      Full deploy (prepare + switch in one step)
     --force-color COLOR  Force deploy to a specific color (blue or green)
   rebuild                Rebuild current active color containers
 
@@ -470,14 +641,20 @@ Operations Commands:
   health-check           Full health check (containers + app + db)
   wait-healthy [secs]    Loop health check until healthy (default: 120)
   view-logs [lines]      Show last N app log lines (default: 200)
-  rollback               Revert to previous tarball + blue-green deploy
+  rollback               Revert to previous version (strategy-aware)
 
 {{HELP_DATABASE_PARTIAL}}Environment:
   DEPLOY_PATH            Override base deployment path (default: auto-detected)
 
+Strategy Detection:
+  The script auto-detects whether to build (in-place) or pull (registry)
+  based on the docker-compose.yml configuration. No flags needed.
+
 Examples:
   remote-ops.sh blue-green-deploy
   remote-ops.sh blue-green-deploy --force-color green
+  remote-ops.sh blue-green-prepare
+  remote-ops.sh blue-green-switch
   remote-ops.sh health-check
   remote-ops.sh active-color
   remote-ops.sh switch-color green
@@ -497,10 +674,12 @@ main() {
 
   case "$command" in
     # Deploy commands
-    setup-dirs)         cmd_setup_dirs "$@" ;;
-    receive-deploy)     cmd_receive_deploy "$@" ;;
-    blue-green-deploy)  cmd_blue_green_deploy "$@" ;;
-    rebuild)            cmd_rebuild "$@" ;;
+    setup-dirs)            cmd_setup_dirs "$@" ;;
+    receive-deploy)        cmd_receive_deploy "$@" ;;
+    blue-green-prepare)    cmd_blue_green_prepare "$@" ;;
+    blue-green-switch)     cmd_blue_green_switch "$@" ;;
+    blue-green-deploy)     cmd_blue_green_deploy "$@" ;;
+    rebuild)               cmd_rebuild "$@" ;;
 
     # Blue-green commands
     switch-color)       cmd_switch_color "$@" ;;
