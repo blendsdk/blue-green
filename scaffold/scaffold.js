@@ -68,6 +68,7 @@ function parseArgs() {
       case '--no-redis':      flags.redis = false; break;
       case '--strategy':      flags.strategy = args[++i]; break;
       case '--registry-url':  flags.registryUrl = args[++i]; break;
+      case '--platform':      flags.platform = args[++i]; break;
       case '--single':        flags.topology = 'single'; break;
       case '--multi':         flags.topology = 'multi'; break;
       case '--force':         flags.force = true; break;
@@ -121,6 +122,7 @@ Flags:
   --no-redis            Exclude Redis (default)
   --strategy <type>     Deployment strategy: in-place (default) or registry
   --registry-url <url>  Docker registry URL (required for registry strategy)
+  --platform <platform> Target platform(s) for Docker builds (e.g., linux/arm64)
   --single              Single-server deployment topology
   --multi               Multi-server deployment topology
   --force               Overwrite existing files without asking
@@ -256,10 +258,23 @@ async function runInteractivePrompts() {
     ], 0);
     const strategy = strategyChoice === 0 ? 'in-place' : 'registry';
 
-    // Registry URL is only needed for registry strategy
+    // Registry URL and platform are only needed for registry strategy
     let registryUrl = '';
+    let platform = '';
     if (strategy === 'registry') {
       registryUrl = await ask(rl, 'Docker registry URL (e.g., registry.internal:5000)');
+
+      // Platform prompt — determines target architecture for Docker builds.
+      // When CI runner arch differs from server arch (e.g., amd64 → arm64),
+      // QEMU + buildx handle cross-compilation automatically.
+      const platformChoice = await choose(rl, 'Target platform(s) for Docker builds:', [
+        'linux/amd64              (x86 servers)',
+        'linux/arm64              (ARM servers)',
+        'linux/amd64,linux/arm64  (mixed fleet — builds both architectures)',
+        'Custom',
+      ], 0);
+      const presets = ['linux/amd64', 'linux/arm64', 'linux/amd64,linux/arm64'];
+      platform = platformChoice < 3 ? presets[platformChoice] : await ask(rl, 'Custom platform(s)');
     }
 
     // --- Deployment topology ---
@@ -270,7 +285,7 @@ async function runInteractivePrompts() {
     ], 0);
     const topology = topologyChoice === 0 ? 'single' : 'multi';
 
-    return { name, appPort, nginxPort, appReplicas, entrypoint, postgres, redis, strategy, registryUrl, topology };
+    return { name, appPort, nginxPort, appReplicas, entrypoint, postgres, redis, strategy, registryUrl, platform, topology };
   } finally {
     rl.close();
   }
@@ -307,6 +322,7 @@ function answersFromFlags(flags) {
     redis: flags.redis !== undefined ? flags.redis : false,
     strategy,
     registryUrl: flags.registryUrl || '',
+    platform: flags.platform || '',
     topology: flags.topology || 'single',
   };
 }
@@ -452,6 +468,16 @@ function buildTemplateVars(answers) {
   // Note: OPERATIONS_DATABASE_STEPS partial exists but is no longer referenced
   // by workflow templates — the deploy CLI `operate` command handles all
   // operations dynamically. Kept for backward compatibility if needed.
+
+  // --- GitHub Actions workflow conditionals (registry vs in-place) ---
+  // DOCKER_PLATFORM: target platform for buildx (e.g., "linux/arm64")
+  vars.DOCKER_PLATFORM = answers.platform || '';
+  // WORKFLOW_REGISTRY_STEPS: QEMU + buildx + login + push block (empty for in-place)
+  vars.WORKFLOW_REGISTRY_STEPS = isRegistry
+    ? readPartial('workflow-release-registry-steps.yml')
+    : '';
+  // UPLOAD_STRATEGY_FLAG: appended to upload command (empty for in-place)
+  vars.UPLOAD_STRATEGY_FLAG = isRegistry ? '--strategy registry' : '';
 
   // --- SECRETS-SETUP.md config secrets table ---
   vars.CONFIG_SECRETS_TABLE = buildConfigSecretsTable(answers);
@@ -792,6 +818,9 @@ function printSummary(results, answers) {
   console.log(`   PostgreSQL: ${answers.postgres ? '✅ Yes' : '❌ No'}`);
   console.log(`   Redis:      ${answers.redis ? '✅ Yes' : '❌ No'}`);
   console.log(`   Strategy:   ${strategyLabel}`);
+  if (answers.platform) {
+    console.log(`   Platform:   ${answers.platform}`);
+  }
   console.log(`   Topology:   ${answers.topology === 'single' ? 'Single server' : 'Multi server'}`);
 
   // --- Skipped files detail ---

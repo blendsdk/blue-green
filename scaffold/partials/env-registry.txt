@@ -2,6 +2,7 @@
 # Docker Registry
 # -----------------------------------------------------------------------------
 # Registry URL where pre-built images are pushed/pulled
+# IMPORTANT: Must NOT include https:// — use hostname:port only (e.g., dr.example.net)
 REGISTRY_URL={{REGISTRY_URL}}
 
 # Image name (typically matches project name)

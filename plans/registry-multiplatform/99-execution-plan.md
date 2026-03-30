@@ -3,7 +3,7 @@
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
 > **Last Updated**: 2026-03-30 14:50
-> **Progress**: 11/24 tasks (46%)
+> **Progress**: 18/24 tasks (75%)
 
 ## Overview
 
@@ -198,13 +198,13 @@ Backport registry strategy support to scaffold templates, add multi-platform Doc
 - [x] 2.1.6 Verify all passing ✅ (completed: 2026-03-30 16:25)
 
 ### Phase 3: Scaffold Generator Updates
-- [ ] 3.1.1 Add --platform CLI flag to argument parser
-- [ ] 3.1.2 Add platform choice prompt (registry strategy only)
-- [ ] 3.1.3 Add platform to answersFromFlags()
-- [ ] 3.1.4 Add DOCKER_PLATFORM + workflow partials to resolveVars()
-- [ ] 3.1.5 Update .env.example with REGISTRY_URL guidance
-- [ ] 3.1.6 Update config summary to show platform
-- [ ] 3.1.7 Verify all passing
+- [x] 3.1.1 Add --platform CLI flag to argument parser ✅ (completed: 2026-03-30 16:26)
+- [x] 3.1.2 Add platform choice prompt (registry strategy only) ✅ (completed: 2026-03-30 16:26)
+- [x] 3.1.3 Add platform to answersFromFlags() ✅ (completed: 2026-03-30 16:27)
+- [x] 3.1.4 Add DOCKER_PLATFORM + WORKFLOW_REGISTRY_STEPS + UPLOAD_STRATEGY_FLAG to buildTemplateVars() ✅ (completed: 2026-03-30 16:27)
+- [x] 3.1.5 Update env-registry.txt with REGISTRY_URL guidance ✅ (completed: 2026-03-30 16:28)
+- [x] 3.1.6 Update config summary + help text to show platform ✅ (completed: 2026-03-30 16:27)
+- [x] 3.1.7 Verify all passing ✅ (completed: 2026-03-30 16:28)
 
 ### Phase 4: Integration Test — In-Place
 - [ ] 4.1.1 Create test/inplace-multi branch on ScaffoldApp
