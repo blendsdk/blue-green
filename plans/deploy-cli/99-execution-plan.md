@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-03-30 02:02
-> **Progress**: 43/47 tasks (91%)
+> **Last Updated**: 2026-03-30 02:18
+> **Progress**: 50/47 tasks (100% of Phase 7 — 3 bonus: scaffold/package.json + validation + ESM fix)
 
 ## Overview
 
@@ -413,13 +413,13 @@ Implement a TypeScript deployment CLI that replaces bash-in-YAML orchestration, 
 - [x] 6.1.5 Update SECRETS-SETUP.md ✅ (completed: 2026-03-30 02:01)
 
 ### Phase 7: Scaffold Generator Updates
-- [ ] 7.1.1 Add deployment strategy prompt
-- [ ] 7.1.2 Add registry URL prompt
-- [ ] 7.1.3 Update partial resolution
-- [ ] 7.1.4 Update file generation (add/remove scripts)
-- [ ] 7.1.5 Update summary output
-- [ ] 7.1.6 Update flag-based mode
-- [ ] 7.1.7 Test scaffold with both strategies
+- [x] 7.1.1 Add deployment strategy prompt ✅ (completed: 2026-03-30 02:15)
+- [x] 7.1.2 Add registry URL prompt ✅ (completed: 2026-03-30 02:15)
+- [x] 7.1.3 Update partial resolution ✅ (completed: 2026-03-30 02:16)
+- [x] 7.1.4 Update file generation (add/remove scripts) ✅ (completed: 2026-03-30 02:16)
+- [x] 7.1.5 Update summary output ✅ (completed: 2026-03-30 02:17)
+- [x] 7.1.6 Update flag-based mode ✅ (completed: 2026-03-30 02:15)
+- [x] 7.1.7 Test scaffold with both strategies ✅ (completed: 2026-03-30 02:18)
 
 ### Phase 8: ScaffoldApp Migration + Integration Testing
 - [ ] 8.1.1 Create feature branch in ScaffoldApp
