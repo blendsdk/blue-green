@@ -84,7 +84,15 @@ function setupSSH(options) {
     configLines.splice(1, 0, `  IdentityFile ${keyPath}`);
   }
   if (options.jumpHost) {
-    configLines.push(`  ProxyJump ${options.jumpHost}`);
+    const proxyOpts = [
+      "-o StrictHostKeyChecking=no",
+      "-o UserKnownHostsFile=/dev/null",
+      "-o LogLevel=ERROR"
+    ];
+    if (keyPath) {
+      proxyOpts.push(`-i ${keyPath}`);
+    }
+    configLines.push(`  ProxyCommand ssh ${proxyOpts.join(" ")} -W %h:%p ${options.jumpHost}`);
   }
   writeFileSync(configPath, configLines.join("\n") + "\n", { mode: 384 });
   return { configPath, keyPath };

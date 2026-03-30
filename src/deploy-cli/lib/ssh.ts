@@ -86,10 +86,22 @@ export function setupSSH(options: SSHOptions): SSHConfig {
     configLines.splice(1, 0, `  IdentityFile ${keyPath}`);
   }
 
-  // Add jump host proxy if configured
-  // This allows reaching servers behind a bastion host via ProxyJump
+  // Add jump host proxy if configured.
+  // Uses ProxyCommand instead of ProxyJump to avoid recursive loop:
+  // ProxyJump applies the same SSH config (-F) to the jump host connection,
+  // which also matches Host *, causing an infinite loop.
+  // ProxyCommand starts a fresh SSH process with explicit options, bypassing our config.
   if (options.jumpHost) {
-    configLines.push(`  ProxyJump ${options.jumpHost}`);
+    const proxyOpts = [
+      '-o StrictHostKeyChecking=no',
+      '-o UserKnownHostsFile=/dev/null',
+      '-o LogLevel=ERROR',
+    ];
+    // Include the identity file in the proxy connection if we have one
+    if (keyPath) {
+      proxyOpts.push(`-i ${keyPath}`);
+    }
+    configLines.push(`  ProxyCommand ssh ${proxyOpts.join(' ')} -W %h:%p ${options.jumpHost}`);
   }
 
   writeFileSync(configPath, configLines.join('\n') + '\n', { mode: 0o600 });
