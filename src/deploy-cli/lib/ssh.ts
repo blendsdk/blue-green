@@ -31,9 +31,12 @@ import { spawn } from './process.ts';
  * The generated files are placed in a temporary directory and should be
  * cleaned up with `cleanupSSH()` after all operations complete.
  *
- * @param options - SSH connection options (key content, jump host)
- * @returns Paths to the generated SSH config and key files
- * @throws Error if no private key is provided
+ * When no private key is provided, the generated SSH config relies on the
+ * system's default SSH keys (~/.ssh/). This supports self-hosted CI runners
+ * with pre-configured SSH access where secrets don't contain a key.
+ *
+ * @param options - SSH connection options (optional key content, jump host)
+ * @returns Paths to the generated SSH config and optional key file
  *
  * @example
  * ```ts
@@ -49,27 +52,27 @@ import { spawn } from './process.ts';
  * ```
  */
 export function setupSSH(options: SSHOptions): SSHConfig {
-  if (!options.privateKey) {
-    throw new Error('SSH private key is required. Set SSH_PRIVATE_KEY environment variable.');
-  }
-
   // Create a unique temp directory for this session's SSH files
   const sshDir = join(tmpdir(), `deploy-cli-ssh-${Date.now()}`);
   mkdirSync(sshDir, { recursive: true });
 
-  const keyPath = join(sshDir, 'deploy_key');
   const configPath = join(sshDir, 'ssh_config');
+  let keyPath: string | undefined;
 
-  // Write the private key with strict permissions (0600 = owner read/write only)
-  // SSH refuses keys with loose permissions
-  writeFileSync(keyPath, options.privateKey + '\n', { mode: 0o600 });
+  // Write the private key if provided (0600 = owner read/write only)
+  // SSH refuses keys with loose permissions.
+  // When no key is provided, the system's default SSH keys (~/.ssh/) are used —
+  // this supports self-hosted runners with pre-configured SSH access.
+  if (options.privateKey) {
+    keyPath = join(sshDir, 'deploy_key');
+    writeFileSync(keyPath, options.privateKey + '\n', { mode: 0o600 });
+  }
 
   // Build SSH config content
   // StrictHostKeyChecking=no is required for CI — servers may be new or rebuilt
   // UserKnownHostsFile=/dev/null prevents accumulating host keys in CI
   const configLines = [
     'Host *',
-    `  IdentityFile ${keyPath}`,
     '  StrictHostKeyChecking no',
     '  UserKnownHostsFile /dev/null',
     '  LogLevel ERROR',
@@ -77,6 +80,11 @@ export function setupSSH(options: SSHOptions): SSHConfig {
     '  ServerAliveCountMax 3',
     '  ConnectTimeout 10',
   ];
+
+  // Only add IdentityFile when we wrote a key — otherwise use system default
+  if (keyPath) {
+    configLines.splice(1, 0, `  IdentityFile ${keyPath}`);
+  }
 
   // Add jump host proxy if configured
   // This allows reaching servers behind a bastion host via ProxyJump

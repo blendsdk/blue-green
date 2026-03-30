@@ -119,14 +119,19 @@ export function buildSSHOptions(sshOpts: {
   keySecretName: string;
   jumpHostSecret?: string;
 }): SSHOptions {
-  // The SSH key is available as an env var named by the inventory's ssh_key_secret field
-  // In practice this is almost always SSH_PRIVATE_KEY, set by GitHub Actions
-  const privateKey = process.env['SSH_PRIVATE_KEY'] ?? process.env[sshOpts.keySecretName];
+  // The SSH key is available as an env var named by the inventory's ssh_key_secret field.
+  // In practice this is almost always SSH_PRIVATE_KEY, set by GitHub Actions.
+  // GitHub Actions sets missing/empty secrets to empty string — treat empty as undefined
+  // so the CLI falls back to the system's default SSH keys (~/.ssh/).
+  const rawKey = process.env['SSH_PRIVATE_KEY'] || process.env[sshOpts.keySecretName];
+  const privateKey = rawKey?.trim() || undefined;
 
-  // Jump host address, if the environment uses jump host access
-  const jumpHost = sshOpts.jumpHostSecret
+  // Jump host address, if the environment uses jump host access.
+  // Same empty-string handling — GitHub Actions may set undefined secrets to "".
+  const rawJumpHost = sshOpts.jumpHostSecret
     ? process.env[sshOpts.jumpHostSecret]
     : undefined;
+  const jumpHost = rawJumpHost?.trim() || undefined;
 
   return { privateKey, jumpHost };
 }

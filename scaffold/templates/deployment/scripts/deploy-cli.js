@@ -63,17 +63,16 @@ function spawn(command, args, options = {}) {
 
 // src/deploy-cli/lib/ssh.ts
 function setupSSH(options) {
-  if (!options.privateKey) {
-    throw new Error("SSH private key is required. Set SSH_PRIVATE_KEY environment variable.");
-  }
   const sshDir = join(tmpdir(), `deploy-cli-ssh-${Date.now()}`);
   mkdirSync(sshDir, { recursive: true });
-  const keyPath = join(sshDir, "deploy_key");
   const configPath = join(sshDir, "ssh_config");
-  writeFileSync(keyPath, options.privateKey + "\n", { mode: 384 });
+  let keyPath;
+  if (options.privateKey) {
+    keyPath = join(sshDir, "deploy_key");
+    writeFileSync(keyPath, options.privateKey + "\n", { mode: 384 });
+  }
   const configLines = [
     "Host *",
-    `  IdentityFile ${keyPath}`,
     "  StrictHostKeyChecking no",
     "  UserKnownHostsFile /dev/null",
     "  LogLevel ERROR",
@@ -81,6 +80,9 @@ function setupSSH(options) {
     "  ServerAliveCountMax 3",
     "  ConnectTimeout 10"
   ];
+  if (keyPath) {
+    configLines.splice(1, 0, `  IdentityFile ${keyPath}`);
+  }
   if (options.jumpHost) {
     configLines.push(`  ProxyJump ${options.jumpHost}`);
   }
@@ -366,8 +368,10 @@ function resolveTargetServers(options) {
   return { servers, sshOptions };
 }
 function buildSSHOptions(sshOpts) {
-  const privateKey = process.env["SSH_PRIVATE_KEY"] ?? process.env[sshOpts.keySecretName];
-  const jumpHost = sshOpts.jumpHostSecret ? process.env[sshOpts.jumpHostSecret] : void 0;
+  const rawKey = process.env["SSH_PRIVATE_KEY"] || process.env[sshOpts.keySecretName];
+  const privateKey = rawKey?.trim() || void 0;
+  const rawJumpHost = sshOpts.jumpHostSecret ? process.env[sshOpts.jumpHostSecret] : void 0;
+  const jumpHost = rawJumpHost?.trim() || void 0;
   return { privateKey, jumpHost };
 }
 async function withSSH(sshOptions, fn) {
