@@ -1,3 +1,12 @@
+# =============================================================================
+# {{PROJECT_NAME}} — Build & Test
+# =============================================================================
+# Runs on every push and pull request to all branches.
+# Validates that the application builds and all tests pass.
+#
+# This workflow has no deployment logic — it only builds and tests.
+# =============================================================================
+
 name: Build & Test
 
 on:
@@ -6,6 +15,7 @@ on:
   pull_request:
     branches: ['*']
 
+# Cancel in-progress runs for the same branch (saves runner resources)
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -16,6 +26,7 @@ jobs:
     runs-on: self-hosted
     timeout-minutes: 20
     steps:
+      # Clean workspace — self-hosted runners persist state between runs
       - name: Clean workspace
         run: find . -mindepth 1 -delete 2>/dev/null || true
 

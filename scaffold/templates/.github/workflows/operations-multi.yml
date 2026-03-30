@@ -1,3 +1,17 @@
+# =============================================================================
+# {{PROJECT_NAME}} — Operations (Multi-Server)
+# =============================================================================
+# Run operational commands across multiple servers per environment.
+# Triggered manually via workflow_dispatch with operation and scope selection.
+#
+# All operations are dispatched through deploy-cli.js operate command,
+# which SSHs into target servers and runs remote-ops.sh <operation>.
+# The CLI handles multi-server parallelism internally.
+#
+# Safety: destructive operations on production are blocked.
+# Architecture: CI Runner → SSH → Remote Servers → remote-ops.sh <op>
+# =============================================================================
+
 name: Operations (Multi-Server)
 
 on:
@@ -35,61 +49,23 @@ on:
           - group
           - server
       server_filter:
-        description: 'Filter value (group name or server name — required when scope is not "all")'
+        description: 'Filter value (required when scope is not "all")'
         required: false
         type: string
         default: ''
 
+# One operation per environment at a time
 concurrency:
   group: ops-${{ inputs.target }}
   cancel-in-progress: false
 
 jobs:
-  resolve:
-    name: Resolve servers
-    runs-on: self-hosted
-    timeout-minutes: 5
-    outputs:
-      servers: ${{ steps.resolve.outputs.servers }}
-      count: ${{ steps.resolve.outputs.count }}
-      access_mode: ${{ steps.resolve.outputs.access_mode }}
-    steps:
-      - name: Clean workspace
-        run: find . -mindepth 1 -delete 2>/dev/null || true
-
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            deployment/scripts
-            deploy-inventory.json
-            deploy-config.json
-          sparse-checkout-cone-mode: false
-
-      - name: Resolve servers
-        id: resolve
-        run: |
-          FILTER_ARG=""
-          if [ -n "${{ inputs.server_filter }}" ]; then
-            FILTER_ARG="--filter ${{ inputs.server_filter }}"
-          fi
-          RESOLVE_CMD="node deployment/scripts/resolve-servers.js --env ${{ inputs.target }} --scope ${{ inputs.server_scope }} ${FILTER_ARG}"
-
-          echo "servers=$($RESOLVE_CMD --format matrix)" >> $GITHUB_OUTPUT
-          echo "count=$($RESOLVE_CMD --format count)" >> $GITHUB_OUTPUT
-          echo "access_mode=$($RESOLVE_CMD --format access-mode)" >> $GITHUB_OUTPUT
-
   operate:
-    name: "${{ inputs.operation }} on ${{ matrix.name }}"
+    name: "${{ inputs.operation }} on ${{ inputs.target }}"
     runs-on: self-hosted
     timeout-minutes: 15
-    needs: [resolve]
-    strategy:
-      fail-fast: false
-      max-parallel: 10
-      matrix:
-        include: ${{ fromJSON(needs.resolve.outputs.servers) }}
     steps:
+      # Safety guard — block destructive operations on production
       - name: Safety check — block destructive ops on production
         if: inputs.target == 'production' && inputs.operation == 'purge-database'
         run: |
@@ -99,74 +75,26 @@ jobs:
       - name: Clean workspace
         run: find . -mindepth 1 -delete 2>/dev/null || true
 
+      # Sparse checkout — operations only need scripts + config files
       - name: Checkout
         uses: actions/checkout@v4
         with:
           sparse-checkout: |
             deployment/scripts
             deploy-config.json
+            deploy-inventory.json
           sparse-checkout-cone-mode: false
 
-      - name: Setup SSH
-        id: ssh
-        env:
-          SSH_KEY_VALUE: ${{ secrets.SSH_PRIVATE_KEY }}
+      # Single CLI call handles everything: SSH setup, multi-server dispatch, cleanup
+      - name: Execute operation on servers
         run: |
-          SSH_CONFIG="/tmp/ssh-deploy-config"
-          IDENTITY_LINE=""
-
-          # Write SSH key from secret if provided (optional — skip if runner has pre-configured SSH)
-          if [ -n "$SSH_KEY_VALUE" ]; then
-            SSH_KEY="/tmp/ssh-deploy-key"
-            printf '%s\n' "$SSH_KEY_VALUE" > $SSH_KEY
-            chmod 600 $SSH_KEY
-            IDENTITY_LINE="  IdentityFile $SSH_KEY"
-          fi
-
-          cat > $SSH_CONFIG << EOF
-          Host *
-            StrictHostKeyChecking no
-            UserKnownHostsFile /dev/null
-            LogLevel ERROR
-          ${IDENTITY_LINE}
-          EOF
-
-          JUMP_HOST="${{ secrets.JUMP_HOST }}"
-          if [ -n "$JUMP_HOST" ]; then
-            echo "  ProxyCommand ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -W %h:%p ${JUMP_HOST}" >> $SSH_CONFIG
-          fi
-
-          chmod 600 $SSH_CONFIG
-          echo "ssh_config=$SSH_CONFIG" >> $GITHUB_OUTPUT
-
-      - name: Execute operation
-        run: |
-          SSH_CONFIG="${{ steps.ssh.outputs.ssh_config }}"
-          SERVER="${{ matrix.host }}"
-          REMOTE_PATH="${{ secrets.DEPLOY_PATH }}"
-          OP="${{ inputs.operation }}"
-
-          case "$OP" in
-            health-check-all|health-check)
-              ssh -F $SSH_CONFIG ${SERVER} "${REMOTE_PATH}/scripts/remote-ops.sh health-check"
-              ;;
-            deploy-config)
-              deployment/scripts/deploy-config-files.sh \
-                "${{ inputs.target }}" "$SSH_CONFIG" "${SERVER}" "${REMOTE_PATH}"
-              ssh -F $SSH_CONFIG ${SERVER} "${REMOTE_PATH}/scripts/remote-ops.sh restart-app"
-              ;;
-            restart-app|restart-all|view-logs|switch-color|rollback|backup|db-table-counts)
-              ssh -F $SSH_CONFIG ${SERVER} "${REMOTE_PATH}/scripts/remote-ops.sh ${OP}"
-              ;;
-            run-migrations)
-              BACKUP_FLAG=""
-              [ "${{ inputs.target }}" = "production" ] && BACKUP_FLAG="--backup"
-              ssh -F $SSH_CONFIG ${SERVER} "${REMOTE_PATH}/scripts/remote-ops.sh run-migrations ${BACKUP_FLAG}"
-              ;;
-            purge-database)
-              ssh -F $SSH_CONFIG ${SERVER} "${REMOTE_PATH}/scripts/remote-ops.sh purge-database"
-              ;;
-          esac
-          echo "✅ ${OP} completed on ${{ matrix.name }}"
+          node deployment/scripts/deploy-cli.js operate \
+            --env ${{ inputs.target }} \
+            --scope ${{ inputs.server_scope }} \
+            --filter "${{ inputs.server_filter }}" \
+            --deploy-path ${{ secrets.DEPLOY_PATH }}/${{ inputs.target }} \
+            --op ${{ inputs.operation }}
         env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          JUMP_HOST: ${{ secrets.JUMP_HOST }}
           ALL_SECRETS: ${{ toJSON(secrets) }}
