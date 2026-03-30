@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-03-30 02:18
-> **Progress**: 50/47 tasks (100% of Phase 7 — 3 bonus: scaffold/package.json + validation + ESM fix)
+> **Last Updated**: 2026-03-30 02:45
+> **Progress**: 56/61 tasks (Phase 8.1 complete — ScaffoldApp migrated to deploy CLI)
 
 ## Overview
 
@@ -422,12 +422,12 @@ Implement a TypeScript deployment CLI that replaces bash-in-YAML orchestration, 
 - [x] 7.1.7 Test scaffold with both strategies ✅ (completed: 2026-03-30 02:18)
 
 ### Phase 8: ScaffoldApp Migration + Integration Testing
-- [ ] 8.1.1 Create feature branch in ScaffoldApp
-- [ ] 8.1.2 Copy deploy-cli.js + remote-ops.sh
-- [ ] 8.1.3 Remove old scripts
-- [ ] 8.1.4 Replace workflow files
-- [ ] 8.1.5 Local verification
-- [ ] 8.1.6 Push and trigger test deploy
+- [x] 8.1.1 Create feature branch in ScaffoldApp ✅ (completed: 2026-03-30 02:40)
+- [x] 8.1.2 Copy deploy-cli.js + remote-ops.sh ✅ (completed: 2026-03-30 02:42)
+- [x] 8.1.3 Remove old scripts ✅ (completed: 2026-03-30 02:42)
+- [x] 8.1.4 Replace workflow files ✅ (completed: 2026-03-30 02:44)
+- [x] 8.1.5 Local verification ✅ (completed: 2026-03-30 02:44)
+- [x] 8.1.6 Push and trigger test deploy ✅ (completed: 2026-03-30 02:45)
 - [ ] 8.2.1 Test two-phase deploy to acceptance
 - [ ] 8.2.2 Test operations workflow
 - [ ] 8.2.3 Test rollback
