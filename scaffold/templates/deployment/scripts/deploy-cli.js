@@ -764,11 +764,16 @@ async function uploadToServer(sshConfig, server, options, args) {
   }
 }
 async function uploadScripts(sshConfig, server, scriptsDir) {
-  await sshExec(sshConfig, server.host, `mkdir -p ${scriptsDir}`);
+  const mkdirResult = await sshExec(sshConfig, server.host, `mkdir -p ${scriptsDir}`);
+  if (mkdirResult.exitCode !== 0) {
+    throw new Error(
+      `Failed to create scripts directory on ${server.name}: ${mkdirResult.stderr.trim() || `exit ${mkdirResult.exitCode}`}`
+    );
+  }
   const scriptFiles = ["remote-ops.sh", "health-check-wait.sh"];
   const localPaths = scriptFiles.map((f) => join2("deployment", "scripts", f)).filter((f) => existsSync(f));
   if (localPaths.length > 0) {
-    await scpUpload(sshConfig, server.host, localPaths, scriptsDir);
+    await scpUpload(sshConfig, server.host, localPaths, `${scriptsDir}/`);
     await sshExec(sshConfig, server.host, `chmod +x ${scriptsDir}/*.sh`);
   }
 }

@@ -177,8 +177,14 @@ async function uploadScripts(
   server: ServerEntry,
   scriptsDir: string,
 ): Promise<void> {
-  // Ensure the scripts directory exists on the remote server
-  await sshExec(sshConfig, server.host, `mkdir -p ${scriptsDir}`);
+  // Ensure the scripts directory exists on the remote server.
+  // Must check exit code — sshExec doesn't throw on failure.
+  const mkdirResult = await sshExec(sshConfig, server.host, `mkdir -p ${scriptsDir}`);
+  if (mkdirResult.exitCode !== 0) {
+    throw new Error(
+      `Failed to create scripts directory on ${server.name}: ${mkdirResult.stderr.trim() || `exit ${mkdirResult.exitCode}`}`,
+    );
+  }
 
   // Upload the two core deployment scripts
   const scriptFiles = ['remote-ops.sh', 'health-check-wait.sh'];
@@ -187,7 +193,7 @@ async function uploadScripts(
     .filter(f => existsSync(f));
 
   if (localPaths.length > 0) {
-    await scpUpload(sshConfig, server.host, localPaths, scriptsDir);
+    await scpUpload(sshConfig, server.host, localPaths, `${scriptsDir}/`);
     // Make scripts executable
     await sshExec(sshConfig, server.host, `chmod +x ${scriptsDir}/*.sh`);
   }
