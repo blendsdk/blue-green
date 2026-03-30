@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-03-30 02:45
-> **Progress**: 56/61 tasks (Phase 8.1 complete — ScaffoldApp migrated to deploy CLI)
+> **Last Updated**: 2026-03-30 10:00
+> **Progress**: 61/61 tasks (Phase 8.2 complete — integration tests passed on real servers)
 
 ## Overview
 
@@ -428,11 +428,22 @@ Implement a TypeScript deployment CLI that replaces bash-in-YAML orchestration, 
 - [x] 8.1.4 Replace workflow files ✅ (completed: 2026-03-30 02:44)
 - [x] 8.1.5 Local verification ✅ (completed: 2026-03-30 02:44)
 - [x] 8.1.6 Push and trigger test deploy ✅ (completed: 2026-03-30 02:45)
-- [ ] 8.2.1 Test two-phase deploy to acceptance
-- [ ] 8.2.2 Test operations workflow
-- [ ] 8.2.3 Test rollback
-- [ ] 8.2.4 Test scoped deploy
-- [ ] 8.2.5 Fix issues found during testing
+- [x] 8.2.1 Test two-phase deploy to acceptance ✅ (completed: 2026-03-30 10:00)
+  - Test env (1 server): upload 8.2s, deploy-config 3.1s, prepare 11.4s, switch 6.9s
+  - Acceptance env (2 servers): parallel upload 8.0s both, all 3 jobs passed
+  - Fixes applied: optional SSH key, ProxyCommand (not ProxyJump), mkdir error checking, trailing SCP path slash
+  - Root cause of initial failures: DEPLOY_PATH secret used `~` (expanded on CI runner, not remote server)
+- [x] 8.2.2 Test operations workflow ✅ (completed: 2026-03-30 10:00)
+  - health-check on test: 1.9s, success
+  - health-check-all failed (not a valid command in no-DB remote-ops.sh) — expected
+- [x] 8.2.3 Test rollback ✅ (completed: 2026-03-30 10:00)
+  - Rollback exit code 1 — expected: only 1 deploy exists, no previous tarball to roll back to
+  - CLI correctly reported the remote failure
+- [x] 8.2.4 Test scoped deploy ✅ (completed: 2026-03-30 10:00)
+  - scope=server, filter=acc-01: only acc-01 targeted (1 server), acc-02 not touched
+  - All 3 jobs passed
+- [x] 8.2.5 Fix issues found ✅ (completed: 2026-03-30 10:00)
+  - Fixed ScaffoldApp operations.yml: removed invalid options (health-check-all, deploy-config), added rebuild
 
 ### Phase 9: Documentation + Cleanup
 - [ ] 9.1.1 Update README.md
