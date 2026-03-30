@@ -3,7 +3,7 @@
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
 > **Last Updated**: 2026-03-30 14:50
-> **Progress**: 5/24 tasks (21%)
+> **Progress**: 11/24 tasks (46%)
 
 ## Overview
 
@@ -190,12 +190,12 @@ Backport registry strategy support to scaffold templates, add multi-platform Doc
 - [x] 1.1.5 Verify all passing ✅ (completed: 2026-03-30 16:21)
 
 ### Phase 2: Workflow Template Backport
-- [ ] 2.1.1 Create workflow-release-registry-steps.yml partial
-- [ ] 2.1.2 Create workflow-release-upload-inplace.yml partial
-- [ ] 2.1.3 Create workflow-release-upload-registry.yml partial
-- [ ] 2.1.4 Update release-multi.yml template with placeholders
-- [ ] 2.1.5 Update release-single.yml template with placeholders
-- [ ] 2.1.6 Verify all passing
+- [x] 2.1.1 Create workflow-release-registry-steps.yml partial ✅ (completed: 2026-03-30 16:23)
+- [x] 2.1.2 Simplified: upload strategy handled via inline {{UPLOAD_STRATEGY_FLAG}} ✅ (completed: 2026-03-30 16:24)
+- [x] 2.1.3 (merged into 2.1.2 — no separate upload partials needed) ✅
+- [x] 2.1.4 Update release-multi.yml template with placeholders ✅ (completed: 2026-03-30 16:24)
+- [x] 2.1.5 Update release-single.yml template with placeholders ✅ (completed: 2026-03-30 16:24)
+- [x] 2.1.6 Verify all passing ✅ (completed: 2026-03-30 16:25)
 
 ### Phase 3: Scaffold Generator Updates
 - [ ] 3.1.1 Add --platform CLI flag to argument parser

@@ -78,16 +78,20 @@ jobs:
           yarn clean && yarn build
 
       # Create the deployment tarball (deployment-X.Y.Z.tgz)
+      # Both strategies need this — in-place uses it directly, registry needs
+      # the Dockerfile and app source for docker build context
       - name: Create deployment package
         run: ./deploy-package.sh
 
-      # Upload tarball + scripts + Docker/Nginx configs to the server
+      # --- Strategy-specific: registry build+push (empty for in-place) ---
+{{WORKFLOW_REGISTRY_STEPS}}
+      # Upload deployment files to the server
       - name: Upload to server
         run: |
           node deployment/scripts/deploy-cli.js upload \
             --env ${{ inputs.deploy_target }} \
             --deploy-path ${{ secrets.DEPLOY_PATH }}/${{ inputs.deploy_target }} \
-            --project-name {{PROJECT_NAME_LOWER}}
+            --project-name {{PROJECT_NAME_LOWER}} {{UPLOAD_STRATEGY_FLAG}}
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           JUMP_HOST: ${{ secrets.JUMP_HOST }}
