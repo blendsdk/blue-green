@@ -3,7 +3,7 @@
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
 > **Last Updated**: 2026-03-30 14:50
-> **Progress**: 0/24 tasks (0%)
+> **Progress**: 5/24 tasks (21%)
 
 ## Overview
 
@@ -183,11 +183,11 @@ Backport registry strategy support to scaffold templates, add multi-platform Doc
 ## Task Checklist (All Phases)
 
 ### Phase 1: Registry Command Refactor
-- [ ] 1.1.1 Refactor registry command to use docker buildx build --push
-- [ ] 1.1.2 Add buildx builder setup (idempotent)
-- [ ] 1.1.3 Change default tag from timestamp to latest
-- [ ] 1.1.4 Add image cleanup after push (docker rmi + prune)
-- [ ] 1.1.5 Verify all passing
+- [x] 1.1.1 Refactor registry command to use docker buildx build --push ✅ (completed: 2026-03-30 16:20)
+- [x] 1.1.2 Add buildx builder setup (idempotent) ✅ (completed: 2026-03-30 16:20)
+- [x] 1.1.3 Change default tag from timestamp to latest ✅ (completed: 2026-03-30 16:20)
+- [x] 1.1.4 Add image cleanup after push (docker rmi + prune) ✅ (completed: 2026-03-30 16:20)
+- [x] 1.1.5 Verify all passing ✅ (completed: 2026-03-30 16:21)
 
 ### Phase 2: Workflow Template Backport
 - [ ] 2.1.1 Create workflow-release-registry-steps.yml partial

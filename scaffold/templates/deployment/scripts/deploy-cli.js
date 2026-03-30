@@ -1011,6 +1011,7 @@ async function runOperation(sshConfig, server, remoteCommand, pipe) {
 }
 
 // src/deploy-cli/commands/registry.ts
+var BUILDX_BUILDER_NAME = "bluegreen";
 async function registryCommand(args) {
   const options = parseRegistryOptions(args);
   const dryRun = args.options["dry-run"] === "true";
@@ -1020,15 +1021,16 @@ async function registryCommand(args) {
   }
   const fullTag = `${options.registryUrl}/${options.imageName}:${options.imageTag}`;
   logger.info(`Building image: ${fullTag}`);
-  await buildImage(fullTag, args, options.platform);
-  await pushImage(fullTag);
+  await ensureBuildxBuilder();
+  await buildAndPushImage(fullTag, args, options.platform);
+  await cleanupImages(fullTag);
   logger.info(`Image pushed successfully: ${fullTag}`);
   console.log(`IMAGE_TAG=${options.imageTag}`);
 }
 function parseRegistryOptions(args) {
   const registryUrl = args.options["registry-url"];
   if (!registryUrl) {
-    logger.error("--registry-url is required (e.g., --registry-url localhost:5000)");
+    logger.error("--registry-url is required (e.g., --registry-url registry.example.com)");
     process.exit(1);
   }
   const imageName = args.options["image-name"];
@@ -1036,62 +1038,86 @@ function parseRegistryOptions(args) {
     logger.error("--image-name is required (e.g., --image-name myapp)");
     process.exit(1);
   }
-  const imageTag = args.options["tag"] ?? generateTimestampTag();
+  const imageTag = args.options["tag"] ?? "latest";
   const platform = args.options["platform"] ?? void 0;
   return { registryUrl, imageName, imageTag, platform };
 }
-async function buildImage(fullTag, args, platform) {
+async function ensureBuildxBuilder() {
+  logger.info(`Ensuring buildx builder "${BUILDX_BUILDER_NAME}" is available`);
+  const createResult = await spawn("docker", [
+    "buildx",
+    "create",
+    "--name",
+    BUILDX_BUILDER_NAME,
+    "--driver",
+    "docker-container"
+  ], {
+    timeout: 15e3
+  });
+  if (createResult.exitCode === 0) {
+    logger.info(`Created buildx builder "${BUILDX_BUILDER_NAME}"`);
+  }
+  const useResult = await spawn("docker", [
+    "buildx",
+    "use",
+    BUILDX_BUILDER_NAME
+  ], {
+    timeout: 5e3
+  });
+  if (useResult.exitCode !== 0) {
+    logger.error(`Failed to select buildx builder "${BUILDX_BUILDER_NAME}"`);
+    logger.error(useResult.stderr.trim());
+    logger.error("docker buildx is required. Install Docker 20.10+ with buildx plugin.");
+    process.exit(1);
+  }
+}
+async function buildAndPushImage(fullTag, args, platform) {
   const deployPath = args.options["deploy-path"] ?? ".";
   const gitSha = await getGitSha();
   const buildArgs = [
+    "buildx",
     "build",
-    "-t",
+    "--tag",
     fullTag,
     "--label",
-    `git.sha=${gitSha}`
+    `git.sha=${gitSha}`,
+    "--push"
+    // Push directly from build cache — no local image load
   ];
   if (platform) {
     buildArgs.push("--platform", platform);
-    logger.info(`Target platform: ${platform}`);
+    logger.info(`Target platform(s): ${platform}`);
   }
   buildArgs.push(deployPath);
-  logger.step("1/2", "Building Docker image");
+  logger.step("1/1", "Building and pushing Docker image via buildx");
   const result = await spawn("docker", buildArgs, {
     pipe: true,
-    // Stream build output live
+    // Stream build output live for CI visibility
     timeout: 6e5
     // 10 minutes for builds
   });
   if (result.exitCode !== 0) {
-    logger.error("Docker build failed");
+    logger.error("Docker buildx build --push failed");
     logger.error(result.stderr.trim());
+    if (result.stderr.includes("exec format error") || result.stderr.includes("no match for platform")) {
+      logger.error("Hint: QEMU may not be registered. Run: docker run --privileged multiarch/qemu-user-static --reset -p yes");
+    }
+    if (result.stderr.includes("unauthorized") || result.stderr.includes("authentication required")) {
+      logger.error("Hint: docker login to the registry may be required before running this command.");
+    }
     process.exit(1);
   }
 }
-async function pushImage(fullTag) {
-  logger.step("2/2", "Pushing Docker image to registry");
-  const result = await spawn("docker", ["push", fullTag], {
-    pipe: true,
-    timeout: 3e5
-    // 5 minutes for push
-  });
-  if (result.exitCode !== 0) {
-    logger.error("Docker push failed");
-    logger.error(result.stderr.trim());
-    process.exit(1);
+async function cleanupImages(fullTag) {
+  logger.info("Cleaning up local images (best-effort)");
+  try {
+    await spawn("docker", ["rmi", fullTag], { timeout: 3e4 });
+  } catch {
   }
-}
-function generateTimestampTag() {
-  const now = /* @__PURE__ */ new Date();
-  const pad = (n) => n.toString().padStart(2, "0");
-  return [
-    now.getFullYear(),
-    pad(now.getMonth() + 1),
-    pad(now.getDate()),
-    pad(now.getHours()),
-    pad(now.getMinutes()),
-    pad(now.getSeconds())
-  ].join("");
+  try {
+    await spawn("docker", ["image", "prune", "-f"], { timeout: 3e4 });
+  } catch {
+  }
 }
 async function getGitSha() {
   try {
@@ -1109,8 +1135,10 @@ function logRegistryDryRun(options) {
   logger.info(`Registry URL: ${options.registryUrl}`);
   logger.info(`Image name: ${options.imageName}`);
   logger.info(`Image tag: ${options.imageTag}`);
+  logger.info(`Platform: ${options.platform ?? "(native)"}`);
   logger.info(`Full tag: ${fullTag}`);
-  logger.info("Would build and push this image");
+  logger.info(`Builder: ${BUILDX_BUILDER_NAME}`);
+  logger.info("Would: create/use buildx builder \u2192 buildx build --push \u2192 cleanup");
 }
 
 // src/deploy-cli/index.ts

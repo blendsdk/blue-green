@@ -132,7 +132,7 @@ export interface RegistryOptions {
   registryUrl: string;
   /** Docker image name (e.g., "scaffoldapp") */
   imageName: string;
-  /** Image tag — typically a timestamp (e.g., "20260329220000") */
+  /** Image tag — defaults to "latest", can be overridden via --tag */
   imageTag: string;
 }
 
