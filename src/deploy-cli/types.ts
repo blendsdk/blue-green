@@ -126,6 +126,8 @@ export interface DeployOptions {
  * Options for the registry command (build + push Docker image on CI).
  */
 export interface RegistryOptions {
+  /** Target platform for Docker build (e.g., "linux/amd64", "linux/arm64") */
+  platform?: string;
   /** Docker registry URL (e.g., "registry.internal:5000") */
   registryUrl: string;
   /** Docker image name (e.g., "scaffoldapp") */

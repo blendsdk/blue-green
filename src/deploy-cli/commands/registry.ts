@@ -47,7 +47,7 @@ export async function registryCommand(args: ParsedArgs): Promise<void> {
   logger.info(`Building image: ${fullTag}`);
 
   // Step 1: Build the Docker image
-  await buildImage(fullTag, args);
+  await buildImage(fullTag, args, options.platform);
 
   // Step 2: Push the image to the registry
   await pushImage(fullTag);
@@ -84,7 +84,9 @@ function parseRegistryOptions(args: ParsedArgs): RegistryOptions {
   // Format: YYYYMMDDHHMMSS — sortable and unique per second
   const imageTag = args.options['tag'] ?? generateTimestampTag();
 
-  return { registryUrl, imageName, imageTag };
+  const platform = args.options['platform'] ?? undefined;
+
+  return { registryUrl, imageName, imageTag, platform };
 }
 
 // ── Docker Build ────────────────────────────────────────
@@ -101,7 +103,7 @@ function parseRegistryOptions(args: ParsedArgs): RegistryOptions {
  * @param fullTag - Full image tag (registry/name:tag)
  * @param args - Parsed CLI arguments for deploy-path
  */
-async function buildImage(fullTag: string, args: ParsedArgs): Promise<void> {
+async function buildImage(fullTag: string, args: ParsedArgs, platform?: string): Promise<void> {
   const deployPath = args.options['deploy-path'] ?? '.';
 
   // Get git SHA for image labeling (traceability)
@@ -111,8 +113,15 @@ async function buildImage(fullTag: string, args: ParsedArgs): Promise<void> {
     'build',
     '-t', fullTag,
     '--label', `git.sha=${gitSha}`,
-    deployPath,
   ];
+
+  // Cross-platform build support: when CI runner arch differs from servers
+  if (platform) {
+    buildArgs.push('--platform', platform);
+    logger.info(`Target platform: ${platform}`);
+  }
+
+  buildArgs.push(deployPath);
 
   logger.step('1/2', 'Building Docker image');
 

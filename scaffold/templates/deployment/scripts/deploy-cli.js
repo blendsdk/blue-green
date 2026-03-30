@@ -1020,7 +1020,7 @@ async function registryCommand(args) {
   }
   const fullTag = `${options.registryUrl}/${options.imageName}:${options.imageTag}`;
   logger.info(`Building image: ${fullTag}`);
-  await buildImage(fullTag, args);
+  await buildImage(fullTag, args, options.platform);
   await pushImage(fullTag);
   logger.info(`Image pushed successfully: ${fullTag}`);
   console.log(`IMAGE_TAG=${options.imageTag}`);
@@ -1037,9 +1037,10 @@ function parseRegistryOptions(args) {
     process.exit(1);
   }
   const imageTag = args.options["tag"] ?? generateTimestampTag();
-  return { registryUrl, imageName, imageTag };
+  const platform = args.options["platform"] ?? void 0;
+  return { registryUrl, imageName, imageTag, platform };
 }
-async function buildImage(fullTag, args) {
+async function buildImage(fullTag, args, platform) {
   const deployPath = args.options["deploy-path"] ?? ".";
   const gitSha = await getGitSha();
   const buildArgs = [
@@ -1047,9 +1048,13 @@ async function buildImage(fullTag, args) {
     "-t",
     fullTag,
     "--label",
-    `git.sha=${gitSha}`,
-    deployPath
+    `git.sha=${gitSha}`
   ];
+  if (platform) {
+    buildArgs.push("--platform", platform);
+    logger.info(`Target platform: ${platform}`);
+  }
+  buildArgs.push(deployPath);
   logger.step("1/2", "Building Docker image");
   const result = await spawn("docker", buildArgs, {
     pipe: true,
