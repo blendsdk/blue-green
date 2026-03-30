@@ -148,6 +148,28 @@ detect_strategy() {
   fi
 }
 
+# Login to Docker registry using credentials from .env file.
+# Called automatically before pull operations in registry strategy.
+# Reads REGISTRY_URL, REGISTRY_USER, REGISTRY_PASSWORD from .env.
+registry_login() {
+  local env_file="${DEPLOY_PATH}/.env"
+
+  # Source registry credentials from .env
+  local reg_url reg_user reg_pass
+  reg_url=$(grep -oP '^REGISTRY_URL=\K.*' "$env_file" 2>/dev/null || true)
+  reg_user=$(grep -oP '^REGISTRY_USER=\K.*' "$env_file" 2>/dev/null || true)
+  reg_pass=$(grep -oP '^REGISTRY_PASSWORD=\K.*' "$env_file" 2>/dev/null || true)
+
+  if [[ -z "$reg_url" || -z "$reg_user" || -z "$reg_pass" ]]; then
+    log_error "Registry credentials incomplete in ${env_file}"
+    log_error "Required: REGISTRY_URL, REGISTRY_USER, REGISTRY_PASSWORD"
+    return 1
+  fi
+
+  echo "  Logging into registry ${reg_url}..."
+  echo "$reg_pass" | docker login "$reg_url" -u "$reg_user" --password-stdin 2>/dev/null
+}
+
 # ── Deploy Commands ──────────────────────────────────────────
 
 # Create the full directory structure needed for deployment.
@@ -241,8 +263,9 @@ cmd_blue_green_prepare() {
   log_step "3/6" "Strategy: ${strategy}"
 
   if [[ "$strategy" == "registry" ]]; then
-    # Registry strategy: pull pre-built image from registry
+    # Registry strategy: login + pull pre-built image from registry
     log_step "3/6" "Pulling app_${target_color} image..."
+    registry_login
     if ! dc pull "app_${target_color}"; then
       log_error "Pull failed for app_${target_color}"
       return 2
@@ -400,7 +423,8 @@ cmd_rebuild() {
   echo "Rebuilding ${current_color} containers (strategy: ${strategy})..."
 
   if [[ "$strategy" == "registry" ]]; then
-    # Registry strategy: pull latest image then recreate containers
+    # Registry strategy: login + pull latest image then recreate containers
+    registry_login
     dc pull "app_${current_color}"
     dc --profile "${current_color}" up -d
   else
