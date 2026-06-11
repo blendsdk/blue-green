@@ -5,7 +5,7 @@
  * Replaces the old deploy-config-files.sh script.
  *
  * Reads deploy-config.json to determine which secrets map to which files,
- * resolves environment-specific placeholders ({ENV} → "ACC"), extracts
+ * resolves environment-specific placeholders (${ENV} → "ACC"), extracts
  * secret values from the ALL_SECRETS environment variable (JSON from
  * `${{ toJSON(secrets) }}`), writes them to temp files, and SCPs them
  * to the correct paths on each server.

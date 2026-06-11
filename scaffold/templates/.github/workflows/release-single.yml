@@ -91,7 +91,7 @@ jobs:
           node deployment/scripts/deploy-cli.js upload \
             --env ${{ inputs.deploy_target }} \
             --deploy-path ${{ secrets.DEPLOY_PATH }}/${{ inputs.deploy_target }} \
-            --project-name {{PROJECT_NAME_LOWER}} {{UPLOAD_STRATEGY_FLAG}}
+            --project-name {{PROJECT_NAME_LOWER}}-${{ inputs.deploy_target }} {{UPLOAD_STRATEGY_FLAG}}
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           JUMP_HOST: ${{ secrets.JUMP_HOST }}

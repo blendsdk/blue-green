@@ -13,11 +13,28 @@ import assert from 'node:assert/strict';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import type { DeployInventory } from '../types.ts';
 import { readInventory, resolveServers, getSSHOptions } from '../lib/inventory.ts';
 
 // Resolve fixture path relative to this test file
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_PATH = join(__dirname, 'fixtures', 'deploy-inventory.json');
+
+/**
+ * Build a minimal single-environment inventory with one server host.
+ * Used by the ${VAR} specification tests to exercise resolution in isolation.
+ */
+function inventoryWithHost(host: string): DeployInventory {
+  return {
+    ssh_key_secret: 'DEPLOY_SSH_KEY',
+    environments: {
+      acceptance: {
+        access: 'direct',
+        servers: [{ name: 'acc-01', host, group: 'all' }],
+      },
+    },
+  };
+}
 
 // ── readInventory ───────────────────────────────────────
 
@@ -279,5 +296,52 @@ describe('getSSHOptions', () => {
         return true;
       },
     );
+  });
+});
+
+// ── Specification: ${VAR} host resolution ───────────────
+// Source: 07-testing-strategy.md ST-14..ST-17 (FR-1, FR-2, FR-3, AR #8, AR #9)
+// Inventory hosts support ${VAR} substitution resolved from a context of
+// process.env plus the injected ${env} (environment name). The ${ENV} prefix
+// is intentionally NOT available in the inventory (AR #9).
+
+describe('Specification: resolveServers ${VAR} host resolution', () => {
+  // Source: ST-14 (FR-1, FR-2, AR #9) — env-var host resolves from process.env
+  it('should resolve a ${VAR} host from process.env', () => {
+    process.env['ACC_HOST'] = '10.0.0.9';
+    try {
+      const inventory = inventoryWithHost('deploy@${ACC_HOST}');
+      const servers = resolveServers(inventory, 'acceptance', 'all');
+      assert.equal(servers[0]?.host, 'deploy@10.0.0.9');
+    } finally {
+      delete process.env['ACC_HOST'];
+    }
+  });
+
+  // Source: ST-15 (FR-4) — static host (no token) passes through unchanged
+  it('should leave a static host (no token) unchanged', () => {
+    const inventory = inventoryWithHost('deploy@10.0.2.10');
+    const servers = resolveServers(inventory, 'acceptance', 'all');
+    assert.equal(servers[0]?.host, 'deploy@10.0.2.10');
+  });
+
+  // Source: ST-16 (FR-3, AR #8) — missing variable is a hard error
+  it('should throw naming the variable when a ${VAR} host is unset', () => {
+    delete process.env['MISSING_HOST'];
+    const inventory = inventoryWithHost('deploy@${MISSING_HOST}');
+    assert.throws(
+      () => resolveServers(inventory, 'acceptance', 'all'),
+      (err: Error) => {
+        assert.ok(err.message.includes('MISSING_HOST'), `Expected 'MISSING_HOST' in: ${err.message}`);
+        return true;
+      },
+    );
+  });
+
+  // Source: ST-17 (FR-2, AR #9) — injected ${env} resolves to the environment name
+  it('should resolve the injected ${env} to the environment name', () => {
+    const inventory = inventoryWithHost('deploy@${env}-host');
+    const servers = resolveServers(inventory, 'acceptance', 'all');
+    assert.equal(servers[0]?.host, 'deploy@acceptance-host');
   });
 });

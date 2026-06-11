@@ -13,6 +13,25 @@ These secrets are needed by ALL deployment workflows:
 | `JUMP_HOST` | Jump host for SSH proxying (if needed) | `user@bastion.example.com` |
 | `DEPLOY_PATH` | Base deployment path on remote servers | `/opt/deployments` |
 
+### Host Secrets (`${VAR}` placeholders)
+
+`deploy-inventory.json` and `deploy-config.json` support `${VAR}` placeholders
+that are resolved at deploy time from environment variables (CI secrets). This
+keeps real server addresses out of git. The default **single-server** inventory
+uses one host variable per environment:
+
+| Secret | Description | Example |
+|--------|-------------|---------|
+| `TEST_HOST` | Host address for the test server | `10.0.1.30` |
+| `ACC_HOST` | Host address for the acceptance server | `10.0.2.10` |
+| `PROD_HOST` | Host address for the production server | `10.0.3.10` |
+
+> **Placeholder format:** Use braced `${VAR}` syntax (e.g. `deploy@${PROD_HOST}`).
+> Placeholders resolve from secrets at deploy time; a missing or empty value
+> fails the deploy fast (it never deploys to a silently-empty host). In
+> `deploy-config.json`, `${ENV}` expands to the environment prefix (e.g. `ACC`)
+> and `${env}` to the environment name (e.g. `acceptance`).
+
 ### SSH Key Setup
 
 1. Generate a dedicated deploy key:

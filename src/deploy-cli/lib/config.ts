@@ -3,7 +3,8 @@
  *
  * Reads and resolves deploy-config.json, which maps GitHub secrets to
  * config files deployed on remote servers. Handles environment-specific
- * placeholder resolution (e.g., {ENV} → "ACC", {env} → "acceptance").
+ * placeholder resolution via the uniform ${VAR} resolver
+ * (e.g., ${ENV} → "ACC", ${env} → "acceptance").
  *
  * Replaces the old resolve-config.js script.
  *
@@ -14,6 +15,7 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
 import type { DeployConfig, ConfigEntry, EnvironmentConfig } from '../types.ts';
+import { resolvePlaceholders } from './env-resolve.ts';
 
 /**
  * A config entry with all placeholders resolved for a specific environment.
@@ -68,14 +70,18 @@ export function readConfig(configPath?: string): DeployConfig {
 /**
  * Resolve config entries for a specific environment.
  *
- * Replaces placeholders in secret keys and local file paths:
- * - `{ENV}` → uppercase prefix (e.g., "ACC", "PROD")
- * - `{env}` → lowercase environment name (e.g., "acceptance", "production")
+ * Every string value in each entry supports `${VAR}` substitution via the
+ * uniform resolver. The resolution context is the real process environment
+ * merged with two injected, environment-aware values (AR #2):
+ * - `${ENV}` → uppercase prefix (e.g., "ACC", "PROD")
+ * - `${env}` → lowercase environment name (e.g., "acceptance", "production")
+ *
+ * A referenced variable that is missing or empty is a hard error (AR #8).
  *
  * @param config - Parsed deploy-config.json
  * @param environment - Target environment name (e.g., "acceptance")
  * @returns Resolved config entries with all placeholders expanded
- * @throws Error if environment not found in config
+ * @throws Error if environment not found, or a referenced variable is unset
  *
  * @example
  * ```ts
@@ -90,15 +96,38 @@ export function resolveConfigEntries(
   environment: string,
 ): ResolvedConfigEntry[] {
   const envConfig = getEnvironmentConfig(config, environment);
+  // ${ENV} → uppercase prefix; ${env} → environment name; plus all real env vars.
+  const context = configContext(envConfig.prefix, environment);
 
-  return config.configs.map((entry: ConfigEntry) => ({
-    name: entry.name,
-    // Replace {ENV} with the uppercase prefix (e.g., "ACC")
-    secretKey: entry.secret_key.replace('{ENV}', envConfig.prefix),
-    // Replace {env} with the lowercase environment name (e.g., "acceptance")
-    localFile: entry.local_file.replace('{env}', environment),
-    deployPath: entry.deploy_path,
-  }));
+  return config.configs.map((entry: ConfigEntry) => {
+    // Resolve the whole entry recursively so every string value supports ${VAR}.
+    // deploy_path is now also resolvable — a harmless superset of the previous
+    // pass-through behavior (FR-4).
+    const resolved = resolvePlaceholders(entry, context);
+    return {
+      name: resolved.name,
+      secretKey: resolved.secret_key,
+      localFile: resolved.local_file,
+      deployPath: resolved.deploy_path,
+    };
+  });
+}
+
+/**
+ * Build the `${VAR}` resolution context for a config environment.
+ *
+ * The context is the real process environment plus the two injected,
+ * environment-aware values used by deploy-config.json (AR #2).
+ *
+ * @param prefix - Uppercase environment prefix (e.g., "ACC") → `${ENV}`
+ * @param environment - Lowercase environment name → `${env}`
+ * @returns Map of variable name → value for the resolver
+ */
+function configContext(
+  prefix: string,
+  environment: string,
+): Record<string, string | undefined> {
+  return { ...process.env, ENV: prefix, env: environment };
 }
 
 // ── Environment Defaults ────────────────────────────────

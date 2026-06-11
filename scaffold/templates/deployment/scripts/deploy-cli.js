@@ -239,6 +239,38 @@ var logger = {
 // src/deploy-cli/lib/inventory.ts
 import { readFileSync } from "fs";
 import { resolve } from "path";
+
+// src/deploy-cli/lib/env-resolve.ts
+var PLACEHOLDER_RE = /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
+function resolveString(input, context) {
+  return input.replace(PLACEHOLDER_RE, (_match, name) => {
+    const value = context[name];
+    if (value === void 0 || value === "") {
+      throw new Error(
+        `Unresolved placeholder "\${${name}}": environment variable "${name}" is not set (or is empty).`
+      );
+    }
+    return value;
+  });
+}
+function resolvePlaceholders(value, context) {
+  if (typeof value === "string") {
+    return resolveString(value, context);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => resolvePlaceholders(item, context));
+  }
+  if (value !== null && typeof value === "object") {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) {
+      out[k] = resolvePlaceholders(v, context);
+    }
+    return out;
+  }
+  return value;
+}
+
+// src/deploy-cli/lib/inventory.ts
 function readInventory(inventoryPath) {
   const filePath = resolve(inventoryPath ?? "deploy-inventory.json");
   let content;
@@ -328,7 +360,8 @@ function getEnvironmentInventory(inventory, environment) {
   Available environments: ${available}`
     );
   }
-  return envInventory;
+  const context = { ...process.env, env: environment };
+  return resolvePlaceholders(envInventory, context);
 }
 
 // src/deploy-cli/commands/shared.ts
@@ -672,14 +705,19 @@ function readConfig(configPath) {
 }
 function resolveConfigEntries(config, environment) {
   const envConfig = getEnvironmentConfig(config, environment);
-  return config.configs.map((entry) => ({
-    name: entry.name,
-    // Replace {ENV} with the uppercase prefix (e.g., "ACC")
-    secretKey: entry.secret_key.replace("{ENV}", envConfig.prefix),
-    // Replace {env} with the lowercase environment name (e.g., "acceptance")
-    localFile: entry.local_file.replace("{env}", environment),
-    deployPath: entry.deploy_path
-  }));
+  const context = configContext(envConfig.prefix, environment);
+  return config.configs.map((entry) => {
+    const resolved = resolvePlaceholders(entry, context);
+    return {
+      name: resolved.name,
+      secretKey: resolved.secret_key,
+      localFile: resolved.local_file,
+      deployPath: resolved.deploy_path
+    };
+  });
+}
+function configContext(prefix, environment) {
+  return { ...process.env, ENV: prefix, env: environment };
 }
 function getEnvDefaults(config, environment) {
   const envConfig = getEnvironmentConfig(config, environment);

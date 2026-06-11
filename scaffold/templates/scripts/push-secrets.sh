@@ -157,8 +157,11 @@ for env in $ENVS; do
     if (!entry) { console.error('Unknown env: ${env}'); process.exit(1); }
     const prefix = typeof entry === 'string' ? entry : entry.prefix;
     for (const c of m.configs) {
-      const key = c.secret_key.replace('{ENV}', prefix);
-      const file = c.local_file.replace('{env}', '${env}');
+      // Placeholders use \${ENV}/\${env} — the backslash keeps bash from
+      // expanding them so node receives the literal placeholder text. The
+      // bash-expanded \${env} on the RHS is the actual environment name.
+      const key = c.secret_key.replace('\${ENV}', prefix);
+      const file = c.local_file.replace('\${env}', '${env}');
       console.log(key + '\t' + file + '\t' + c.name);
     }
   " 2>/dev/null) || {

@@ -398,8 +398,8 @@ your-project/
 | **Registry strategy** | `docker-compose.yml` uses `image:` directive; `.env` includes registry vars; workflow includes buildx + QEMU steps |
 | **PostgreSQL** | Adds postgres + pg-backup services, backup script, database operations, env vars |
 | **Redis** | Adds redis service and env vars |
-| **Single server** | Generates `release.yml` (single deploy job) |
-| **Multi server** | Generates `release.yml` with three-job barrier pattern + `deploy-inventory.json` |
+| **Single server** | Generates `release.yml` (single deploy job); `deploy-inventory.json` with one `${VAR}` host per environment |
+| **Multi server** | Generates `release.yml` with three-job barrier pattern; `deploy-inventory.json` with a multi-server example |
 | **Platform** | Sets `--platform` in generated workflow registry steps |
 
 ---
@@ -864,6 +864,47 @@ Deploy CLI resolves servers by scope:
 | `tag` | `--scope tag --filter eu-west` | All servers with tag "eu-west" |
 | `server` | `--scope server --filter prod-01` | Single server by name |
 
+> **Always generated:** `deploy-inventory.json` is now generated for **both**
+> single- and multi-server topologies. The single-server form contains one
+> server per environment (test/acceptance/production) using `${VAR}` hosts.
+
+### Placeholders (`${VAR}`)
+
+Every string value in both `deploy-inventory.json` and `deploy-config.json`
+supports `${VAR}` substitution, resolved at deploy time:
+
+- **Syntax** — braced `${VAR}` only. Bare `$VAR` is left untouched, and there is
+  no escape syntax for a literal `${...}`.
+- **Resolution context** — real environment variables (CI secrets) plus injected,
+  environment-aware values:
+  - `${env}` — the environment name (e.g. `acceptance`). Available in **both** files.
+  - `${ENV}` — the uppercase environment prefix (e.g. `ACC`). Available in
+    `deploy-config.json` **only**.
+- **Missing/empty variable** — a referenced variable that is unset or empty is a
+  **hard error**; the deploy aborts immediately (fail-fast) so you never deploy
+  to a silently-empty host.
+
+This lets you keep real server addresses out of git and resolve them from CI
+secrets at deploy time:
+
+```jsonc
+// deploy-inventory.json — host resolved from the PROD_HOST secret
+{ "name": "prod-01", "host": "deploy@${PROD_HOST}", "group": "all" }
+```
+
+```jsonc
+// deploy-config.json — ${ENV}/${env} expand per environment
+{ "secret_key": "${ENV}_ENV_FILE", "local_file": "local_data/${env}/.env" }
+```
+
+For the single-server topology the generated inventory uses `${TEST_HOST}`,
+`${ACC_HOST}`, and `${PROD_HOST}` — add those as GitHub secrets / CI environment
+variables.
+
+> **Per-environment Compose project name:** the generated release workflow sets
+> `COMPOSE_PROJECT_NAME` to `<project>-<deploy_target>` (e.g. `my-app-production`),
+> so environments deployed to the same host get isolated Docker Compose resources.
+
 ---
 
 ## Deployment Topologies
@@ -1031,7 +1072,7 @@ src/deploy-cli/                  # TypeScript source
 │   ├── process.ts               # Spawn helper with timeout and stream capture
 │   ├── logger.ts                # Structured output with emoji prefixes
 │   ├── ssh.ts                   # SSH setup, exec, SCP upload, cleanup
-│   ├── config.ts                # Config resolution ({ENV} placeholders)
+│   ├── config.ts                # Config resolution (${VAR} placeholders)
 │   └── inventory.ts             # Server inventory resolution (scope/filter)
 ├── commands/                    # Command implementations
 │   ├── shared.ts                # Common infrastructure (parseDeployOptions, executeOnServers)
