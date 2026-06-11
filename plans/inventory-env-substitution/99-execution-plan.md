@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-06-11 12:59
-> **Progress**: 5/16 tasks (31%)
+> **Last Updated**: 2026-06-11 13:03
+> **Progress**: 10/16 tasks (63%)
 > **CodeOps Version**: (codeops-mcp current)
 
 ## Overview
@@ -140,11 +140,11 @@ bundle. Spec-first ordering per `testing.md` Rule 10.
 - [x] 1.1.5 Write impl edge-case tests (`env-resolve.impl.test.ts`) ✅ (completed: 2026-06-11 12:58)
 
 ### Phase 2: Wire into config + inventory
-- [ ] 2.1.1 Update `config.test.ts` + fixture to `${ENV}`/`${env}`
-- [ ] 2.1.2 Replace `{ENV}`/`{env}` logic in `config.ts`
-- [ ] 2.1.3 Add inventory `${VAR}` spec tests
-- [ ] 2.1.4 Wire resolver into `inventory.ts`
-- [ ] 2.1.5 Update `types.ts` JSDoc
+- [x] 2.1.1 Update `config.test.ts` + fixture to `${ENV}`/`${env}` ✅ (completed: 2026-06-11 13:00)
+- [x] 2.1.2 Replace `{ENV}`/`{env}` logic in `config.ts` ✅ (completed: 2026-06-11 13:01)
+- [x] 2.1.3 Add inventory `${VAR}` spec tests ✅ (completed: 2026-06-11 13:02)
+- [x] 2.1.4 Wire resolver into `inventory.ts` ✅ (completed: 2026-06-11 13:02)
+- [x] 2.1.5 Update `types.ts` JSDoc ✅ (completed: 2026-06-11 13:03)
 
 ### Phase 3: Scaffold + workflows
 - [ ] 3.1.1 scaffold.js: always-inventory, topology branch, config syntax + shape

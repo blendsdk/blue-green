@@ -30,11 +30,11 @@ export interface DeployConfig {
 export interface ConfigEntry {
   /** Human-readable name for this config entry */
   name: string;
-  /** Secret key pattern — "{ENV}" is replaced with the environment prefix (e.g., "ACC") */
+  /** Secret key pattern — supports ${VAR}; ${ENV} resolves to the environment prefix (e.g., "ACC") */
   secret_key: string;
-  /** Local file path pattern — "{env}" is replaced with the environment name */
+  /** Local file path pattern — supports ${VAR}; ${env} resolves to the environment name */
   local_file: string;
-  /** Remote path relative to deploy-path where the file is placed */
+  /** Remote path relative to deploy-path where the file is placed — supports ${VAR} */
   deploy_path: string;
 }
 

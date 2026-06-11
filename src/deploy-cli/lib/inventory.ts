@@ -18,6 +18,7 @@ import type {
   EnvironmentInventory,
   ServerEntry,
 } from '../types.ts';
+import { resolvePlaceholders } from './env-resolve.ts';
 
 // ── Inventory Reading ───────────────────────────────────
 
@@ -186,12 +187,21 @@ export function getSSHOptions(
 // ── Internal Helpers ────────────────────────────────────
 
 /**
- * Look up environment inventory, throwing a descriptive error if not found.
+ * Look up environment inventory, throwing a descriptive error if not found,
+ * and resolve `${VAR}` placeholders in every string value (e.g., server hosts).
+ *
+ * Resolution happens here — rather than in `readInventory()` — because the
+ * environment name is only known at lookup time, and `${env}` must resolve to
+ * it. The resolution context is the real process environment plus the injected
+ * `${env}` (environment name). The `${ENV}` prefix is intentionally NOT injected
+ * for inventory (AR #9). A referenced variable that is missing or empty is a
+ * hard error (AR #8). The parsed inventory is not mutated; a resolved copy of
+ * the environment entry is returned.
  *
  * @param inventory - Parsed deploy-inventory.json
  * @param environment - Environment name to look up
- * @returns The environment inventory entry
- * @throws Error with available environments listed
+ * @returns The environment inventory entry with placeholders resolved
+ * @throws Error if environment not found, or a referenced variable is unset
  */
 function getEnvironmentInventory(
   inventory: DeployInventory,
@@ -205,5 +215,8 @@ function getEnvironmentInventory(
       `  Available environments: ${available}`,
     );
   }
-  return envInventory;
+  // Resolve ${VAR} in hosts (and any other string values) from process.env plus
+  // the injected ${env}. No ${ENV} prefix in inventory context (AR #9).
+  const context = { ...process.env, env: environment };
+  return resolvePlaceholders(envInventory, context);
 }

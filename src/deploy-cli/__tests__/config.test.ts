@@ -56,15 +56,16 @@ describe('readConfig', () => {
 // ── resolveConfigEntries ────────────────────────────────
 
 describe('resolveConfigEntries', () => {
-  it('should resolve {ENV} placeholder with uppercase prefix for acceptance', () => {
+  // Source: 07-testing-strategy.md ST-11, ST-12 (FR-5, AR #1)
+  it('should resolve ${ENV} placeholder with uppercase prefix for acceptance', () => {
     const config = readConfig(FIXTURE_PATH);
     const entries = resolveConfigEntries(config, 'acceptance');
 
     assert.equal(entries.length, 2);
 
     // First entry: Docker Environment
-    assert.equal(entries[0]?.secretKey, 'ACC_ENV_FILE', '{ENV} should be replaced with ACC');
-    assert.equal(entries[0]?.localFile, 'local_data/acceptance/.env', '{env} should be replaced with acceptance');
+    assert.equal(entries[0]?.secretKey, 'ACC_ENV_FILE', '${ENV} should be replaced with ACC');
+    assert.equal(entries[0]?.localFile, 'local_data/acceptance/.env', '${env} should be replaced with acceptance');
     assert.equal(entries[0]?.deployPath, '.env');
 
     // Second entry: App Config
