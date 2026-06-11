@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-06-11 13:11
-> **Progress**: 16/18 tasks (89%)
+> **Last Updated**: 2026-06-11 13:13
+> **Progress**: 18/18 tasks (100%)
 > **CodeOps Version**: (codeops-mcp current)
 
 ## Overview
@@ -157,8 +157,8 @@ bundle. Spec-first ordering per `testing.md` Rule 10.
 - [x] 4.1.2 SECRETS-SETUP updates ✅ (completed: 2026-06-11 13:10)
 
 ### Phase 5: Bundle + verify
-- [ ] 5.1.1 Rebuild bundle
-- [ ] 5.1.2 Full verify + bash -n + cleanup
+- [x] 5.1.1 Rebuild bundle ✅ (completed: 2026-06-11 13:12)
+- [x] 5.1.2 Full verify + bash -n + cleanup ✅ (completed: 2026-06-11 13:12)
 
 ---
 
