@@ -116,10 +116,12 @@ jobs:
             --scope ${{ inputs.deploy_scope }} \
             --filter "${{ inputs.deploy_filter }}" \
             --deploy-path ${{ secrets.DEPLOY_PATH }}/${{ inputs.deploy_target }} \
-            --project-name {{PROJECT_NAME_LOWER}}-${{ inputs.deploy_target }} {{UPLOAD_STRATEGY_FLAG}}
+            --project-name {{PROJECT_NAME_LOWER}}-${{ inputs.deploy_target }} \
+            --tarball deployment-latest.tgz {{UPLOAD_STRATEGY_FLAG}}
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           JUMP_HOST: ${{ secrets.JUMP_HOST }}
+          ALL_SECRETS: ${{ toJSON(secrets) }}
 
       # Deploy config files from GitHub secrets to ALL target servers
       - name: Deploy config files to all servers
@@ -146,6 +148,7 @@ jobs:
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           JUMP_HOST: ${{ secrets.JUMP_HOST }}
+          ALL_SECRETS: ${{ toJSON(secrets) }}
 
   # ── Switch ───────────────────────────────────────────────────
   # Switches ALL servers simultaneously (nginx upstream swap + reload).
@@ -174,3 +177,4 @@ jobs:
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           JUMP_HOST: ${{ secrets.JUMP_HOST }}
+          ALL_SECRETS: ${{ toJSON(secrets) }}

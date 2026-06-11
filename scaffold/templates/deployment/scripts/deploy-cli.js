@@ -360,8 +360,23 @@ function getEnvironmentInventory(inventory, environment) {
   Available environments: ${available}`
     );
   }
-  const context = { ...process.env, env: environment };
+  const secrets = parseAllSecrets();
+  const context = { ...secrets, ...process.env, env: environment };
   return resolvePlaceholders(envInventory, context);
+}
+function parseAllSecrets() {
+  const raw = process.env["ALL_SECRETS"];
+  if (!raw) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed !== null && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed;
+    }
+  } catch {
+  }
+  return {};
 }
 
 // src/deploy-cli/commands/shared.ts

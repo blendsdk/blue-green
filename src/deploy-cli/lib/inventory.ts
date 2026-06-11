@@ -215,8 +215,49 @@ function getEnvironmentInventory(
       `  Available environments: ${available}`,
     );
   }
-  // Resolve ${VAR} in hosts (and any other string values) from process.env plus
-  // the injected ${env}. No ${ENV} prefix in inventory context (AR #9).
-  const context = { ...process.env, env: environment };
+  // Resolve ${VAR} in hosts (and any other string values) from GitHub secrets
+  // (ALL_SECRETS) plus process.env plus the injected ${env}. No ${ENV} prefix in
+  // inventory context (AR #9).
+  //
+  // Host placeholders like ${PROD_HOST} are typically provided as GitHub
+  // repository secrets (so real addresses stay out of git). The workflows export
+  // these via `ALL_SECRETS: ${{ toJSON(secrets) }}`. We merge those into the
+  // resolution context so inventory hosts resolve without every secret needing a
+  // dedicated `env:` entry. process.env takes precedence over ALL_SECRETS, and
+  // the injected `env` takes precedence over both.
+  const secrets = parseAllSecrets();
+  const context = { ...secrets, ...process.env, env: environment };
   return resolvePlaceholders(envInventory, context);
 }
+
+/**
+ * Parse the ALL_SECRETS environment variable into a plain string map.
+ *
+ * ALL_SECRETS is set by the generated GitHub Actions workflows via
+ * `ALL_SECRETS: ${{ toJSON(secrets) }}`. It is a JSON object whose keys are
+ * secret names and whose values are the secret contents. When it is absent
+ * (e.g. local runs or workflows that don't export it) an empty map is returned,
+ * so plain inventories with no `${VAR}` hosts keep working unchanged.
+ *
+ * Parsing is best-effort: malformed JSON yields an empty map rather than a hard
+ * failure here, so the downstream placeholder resolver produces the precise,
+ * variable-named error if a referenced host secret is genuinely missing.
+ *
+ * @returns Map of secret name → value (empty when ALL_SECRETS is unset/invalid)
+ */
+function parseAllSecrets(): Record<string, string> {
+  const raw = process.env['ALL_SECRETS'];
+  if (!raw) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, string>;
+    }
+  } catch {
+    // Ignore — fall through to empty map (see JSDoc rationale).
+  }
+  return {};
+}
+

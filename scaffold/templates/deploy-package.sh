@@ -191,6 +191,21 @@ echo "✅ Build completed successfully!"
 echo "✅ Deployment package: ${DEPLOYMENT_FILE}"
 ls -lh "${DEPLOYMENT_FILE}"
 
+# ── Stable "latest" Tarball Copies ───────────────────────────
+# Downstream steps consume a stable, version-independent filename:
+#   - ./deployment-latest.tgz        → uploaded to servers by `deploy-cli upload`
+#     (in-place strategy) for remote `docker build`.
+#   - ./deployment/deployment-latest.tgz → lives in the Docker build context so
+#     the registry `docker buildx build deployment` step can `COPY` it.
+# Both are *.tgz and therefore git-ignored. We copy (not symlink) so the file is
+# materialized inside the build context for Docker.
+echo "Creating stable deployment-latest.tgz copies..."
+cp "${DEPLOYMENT_FILE}" ./deployment-latest.tgz
+if [ -d ./deployment ]; then
+  cp "${DEPLOYMENT_FILE}" ./deployment/deployment-latest.tgz
+fi
+echo "✅ deployment-latest.tgz ready (root + build context)"
+
 # ── Optional: Deploy to Remote Server ────────────────────────
 if [ -n "$REMOTE_HOST" ]; then
   echo ""

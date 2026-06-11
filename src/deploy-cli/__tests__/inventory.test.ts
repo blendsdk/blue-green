@@ -345,3 +345,54 @@ describe('Specification: resolveServers ${VAR} host resolution', () => {
     assert.equal(servers[0]?.host, 'deploy@acceptance-host');
   });
 });
+
+// ── ALL_SECRETS host resolution ─────────────────────────
+// Inventory hosts may reference GitHub repository secrets (e.g. ${PROD_HOST}).
+// The generated workflows export all secrets to the inventory-consuming steps
+// via `ALL_SECRETS: ${{ toJSON(secrets) }}`. resolveServers merges that JSON
+// into the resolution context so such hosts resolve without a dedicated env:
+// entry per secret.
+
+describe('resolveServers — ALL_SECRETS host resolution', () => {
+  it('should resolve a ${VAR} host from ALL_SECRETS', () => {
+    process.env['ALL_SECRETS'] = JSON.stringify({ PROD_HOST: '10.0.3.10' });
+    try {
+      const inventory = inventoryWithHost('deploy@${PROD_HOST}');
+      const servers = resolveServers(inventory, 'acceptance', 'all');
+      assert.equal(servers[0]?.host, 'deploy@10.0.3.10');
+    } finally {
+      delete process.env['ALL_SECRETS'];
+    }
+  });
+
+  it('should let process.env take precedence over ALL_SECRETS', () => {
+    process.env['ALL_SECRETS'] = JSON.stringify({ PROD_HOST: 'from-secrets' });
+    process.env['PROD_HOST'] = 'from-env';
+    try {
+      const inventory = inventoryWithHost('deploy@${PROD_HOST}');
+      const servers = resolveServers(inventory, 'acceptance', 'all');
+      assert.equal(servers[0]?.host, 'deploy@from-env');
+    } finally {
+      delete process.env['ALL_SECRETS'];
+      delete process.env['PROD_HOST'];
+    }
+  });
+
+  it('should ignore malformed ALL_SECRETS and still error on the named var', () => {
+    process.env['ALL_SECRETS'] = 'not-json{';
+    delete process.env['PROD_HOST'];
+    try {
+      const inventory = inventoryWithHost('deploy@${PROD_HOST}');
+      assert.throws(
+        () => resolveServers(inventory, 'acceptance', 'all'),
+        (err: Error) => {
+          assert.ok(err.message.includes('PROD_HOST'), `Expected 'PROD_HOST' in: ${err.message}`);
+          return true;
+        },
+      );
+    } finally {
+      delete process.env['ALL_SECRETS'];
+    }
+  });
+});
+
