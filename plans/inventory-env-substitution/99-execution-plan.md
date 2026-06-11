@@ -2,8 +2,8 @@
 
 > **Document**: 99-execution-plan.md
 > **Parent**: [Index](00-index.md)
-> **Last Updated**: 2026-06-11 13:03
-> **Progress**: 10/16 tasks (63%)
+> **Last Updated**: 2026-06-11 13:06
+> **Progress**: 14/16 tasks (88%)
 > **CodeOps Version**: (codeops-mcp current)
 
 ## Overview
@@ -147,10 +147,10 @@ bundle. Spec-first ordering per `testing.md` Rule 10.
 - [x] 2.1.5 Update `types.ts` JSDoc ✅ (completed: 2026-06-11 13:03)
 
 ### Phase 3: Scaffold + workflows
-- [ ] 3.1.1 scaffold.js: always-inventory, topology branch, config syntax + shape
-- [ ] 3.1.2 Migrate `deploy-config.json` template
-- [ ] 3.1.3 Release workflows project-name per target
-- [ ] 3.1.4 Add + run `verify-scaffold-output.sh`
+- [x] 3.1.1 scaffold.js: always-inventory, topology branch, config syntax + shape ✅ (completed: 2026-06-11 13:05)
+- [x] 3.1.2 Migrate `deploy-config.json` template ✅ (completed: 2026-06-11 13:05)
+- [x] 3.1.3 Release workflows project-name per target ✅ (completed: 2026-06-11 13:05)
+- [x] 3.1.4 Add + run `verify-scaffold-output.sh` ✅ (completed: 2026-06-11 13:06)
 
 ### Phase 4: Docs
 - [ ] 4.1.1 README updates

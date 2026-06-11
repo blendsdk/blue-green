@@ -581,11 +581,10 @@ function buildFileList(answers) {
 
   // --- Config files (always) ---
   add('deploy-config.json', 'deploy-config.json');
-
-  // --- Inventory (only if multi) ---
-  if (answers.topology === 'multi') {
-    add('deploy-inventory.json', 'deploy-inventory.json');
-  }
+  // Inventory is ALWAYS generated — every command path (including single-server)
+  // reads deploy-inventory.json via resolveTargetServers(). The body is
+  // topology-aware (see generateDeployInventory). (FR-6)
+  add('deploy-inventory.json', 'deploy-inventory.json');
 
   // --- GitHub Actions (topology-dependent) ---
   add('.github/workflows/build-test.yml', '.github/workflows/build-test.yml');
@@ -660,22 +659,36 @@ function generateDeployConfig(answers) {
   const config = {
     configs: [
       {
+        // ${ENV} resolves to the environment prefix (e.g., "ACC");
+        // ${env} resolves to the environment name (e.g., "acceptance").
         name: 'Docker Environment',
-        secret_key: '{ENV}_ENV_FILE',
-        local_file: 'local_data/{env}/.env',
+        secret_key: '${ENV}_ENV_FILE',
+        local_file: 'local_data/${env}/.env',
         deploy_path: '.env',
       },
       {
         name: 'App Config',
-        secret_key: '{ENV}_APP_CONFIG',
-        local_file: 'local_data/{env}/app-config.json',
+        secret_key: '${ENV}_APP_CONFIG',
+        local_file: 'local_data/${env}/app-config.json',
         deploy_path: 'app-config.json',
       },
     ],
+    // Each environment carries its uppercase prefix and default env vars.
+    // This shape matches the CLI's EnvironmentConfig type and the
+    // deploy-config.json template (prefix + env_defaults).
     environments: {
-      test: 'TEST',
-      acceptance: 'ACC',
-      production: 'PROD',
+      test: {
+        prefix: 'TEST',
+        env_defaults: { NGINX_HTTP_PORT: '8080', DOZZLE_PORT: '9980' },
+      },
+      acceptance: {
+        prefix: 'ACC',
+        env_defaults: { NGINX_HTTP_PORT: '8081', DOZZLE_PORT: '9981' },
+      },
+      production: {
+        prefix: 'PROD',
+        env_defaults: { NGINX_HTTP_PORT: '8082', DOZZLE_PORT: '9982' },
+      },
     },
   };
 
@@ -687,13 +700,47 @@ function generateDeployConfig(answers) {
 // =============================================================================
 
 /**
- * Generate deploy-inventory.json content for multi-server topology.
- * Provides a starter template with example environments.
+ * Generate deploy-inventory.json content. The body is topology-aware:
+ *
+ * - single: one server per environment (test/acceptance/production), all
+ *   `access: direct`, with `${VAR}` hosts so real addresses stay out of git
+ *   and resolve from CI secrets at deploy time (FR-7, AR #10).
+ * - multi: a richer multi-server example (jump host, tags) users can edit.
  *
  * @param {object} answers - User answers
  * @returns {string} JSON string for deploy-inventory.json
  */
 function generateDeployInventory(answers) {
+  if (answers.topology === 'single') {
+    // One server per environment, direct access. ${VAR} hosts let users keep
+    // real addresses out of git — resolved from CI secrets at deploy time.
+    const inventory = {
+      ssh_key_secret: 'DEPLOY_SSH_KEY',
+      environments: {
+        test: {
+          access: 'direct',
+          servers: [
+            { name: 'test-01', host: 'deploy@${TEST_HOST}', group: 'all' },
+          ],
+        },
+        acceptance: {
+          access: 'direct',
+          servers: [
+            { name: 'acc-01', host: 'deploy@${ACC_HOST}', group: 'all' },
+          ],
+        },
+        production: {
+          access: 'direct',
+          servers: [
+            { name: 'prod-01', host: 'deploy@${PROD_HOST}', group: 'all' },
+          ],
+        },
+      },
+    };
+    return JSON.stringify(inventory, null, 2) + '\n';
+  }
+
+  // multi — richer multi-server example (unchanged shape) for users to edit.
   const inventory = {
     ssh_key_secret: 'DEPLOY_SSH_KEY',
     environments: {
