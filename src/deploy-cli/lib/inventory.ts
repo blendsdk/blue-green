@@ -168,7 +168,7 @@ export function resolveServers(
  * @example
  * ```ts
  * const sshOpts = getSSHOptions(inventory, 'acceptance');
- * // sshOpts.keySecretName === "DEPLOY_SSH_KEY"
+ * // sshOpts.keySecretName === "SSH_PRIVATE_KEY"
  * // sshOpts.jumpHostSecret === "JUMP_HOST"
  * ```
  */

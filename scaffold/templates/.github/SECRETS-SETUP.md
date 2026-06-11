@@ -45,6 +45,14 @@ uses one host variable per environment:
 
 4. If using a jump host, add the public key to the jump host's `authorized_keys` too.
 
+> **`SSH_PRIVATE_KEY` vs. `ssh_key_secret`:** Configure the **`SSH_PRIVATE_KEY`**
+> GitHub secret — that is the one the workflows export and the CLI reads first.
+> The `ssh_key_secret` field in `deploy-inventory.json` is only the *name* of a
+> fallback env var (it defaults to `SSH_PRIVATE_KEY` too). You do **not** need to
+> create a separate `DEPLOY_SSH_KEY` secret; the fallback only matters if you
+> deliberately point `ssh_key_secret` at a differently-named secret and export
+> that secret yourself in the workflow.
+
 ## Per-Environment Config Secrets
 
 These secrets contain configuration files deployed to each environment.

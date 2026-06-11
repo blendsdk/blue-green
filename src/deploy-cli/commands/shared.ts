@@ -119,10 +119,15 @@ export function buildSSHOptions(sshOpts: {
   keySecretName: string;
   jumpHostSecret?: string;
 }): SSHOptions {
-  // The SSH key is available as an env var named by the inventory's ssh_key_secret field.
-  // In practice this is almost always SSH_PRIVATE_KEY, set by GitHub Actions.
-  // GitHub Actions sets missing/empty secrets to empty string — treat empty as undefined
-  // so the CLI falls back to the system's default SSH keys (~/.ssh/).
+  // SSH key resolution order:
+  //   1. SSH_PRIVATE_KEY — the primary env var, always checked first. This is
+  //      the secret the generated GitHub Actions workflows export, and the one
+  //      documented in SECRETS-SETUP.md. Configure THIS one.
+  //   2. inventory's ssh_key_secret — a configurable fallback name. By default
+  //      this is also "SSH_PRIVATE_KEY", so it's a no-op unless a project points
+  //      it at a differently-named secret AND exports that secret in CI.
+  // GitHub Actions sets missing/empty secrets to empty string — treat empty as
+  // undefined so the CLI falls back to the system's default SSH keys (~/.ssh/).
   const rawKey = process.env['SSH_PRIVATE_KEY'] || process.env[sshOpts.keySecretName];
   const privateKey = rawKey?.trim() || undefined;
 

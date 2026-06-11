@@ -715,7 +715,7 @@ function generateDeployInventory(answers) {
     // One server per environment, direct access. ${VAR} hosts let users keep
     // real addresses out of git — resolved from CI secrets at deploy time.
     const inventory = {
-      ssh_key_secret: 'DEPLOY_SSH_KEY',
+      ssh_key_secret: 'SSH_PRIVATE_KEY',
       environments: {
         test: {
           access: 'direct',
@@ -742,7 +742,7 @@ function generateDeployInventory(answers) {
 
   // multi — richer multi-server example (unchanged shape) for users to edit.
   const inventory = {
-    ssh_key_secret: 'DEPLOY_SSH_KEY',
+    ssh_key_secret: 'SSH_PRIVATE_KEY',
     environments: {
       test: {
         access: 'direct',

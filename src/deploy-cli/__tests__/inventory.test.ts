@@ -26,7 +26,7 @@ const FIXTURE_PATH = join(__dirname, 'fixtures', 'deploy-inventory.json');
  */
 function inventoryWithHost(host: string): DeployInventory {
   return {
-    ssh_key_secret: 'DEPLOY_SSH_KEY',
+    ssh_key_secret: 'SSH_PRIVATE_KEY',
     environments: {
       acceptance: {
         access: 'direct',
@@ -42,7 +42,7 @@ describe('readInventory', () => {
   it('should read and parse a valid inventory file', () => {
     const inventory = readInventory(FIXTURE_PATH);
 
-    assert.equal(inventory.ssh_key_secret, 'DEPLOY_SSH_KEY');
+    assert.equal(inventory.ssh_key_secret, 'SSH_PRIVATE_KEY');
     assert.ok(typeof inventory.environments === 'object');
   });
 
@@ -268,14 +268,14 @@ describe('getSSHOptions', () => {
     const inventory = readInventory(FIXTURE_PATH);
     const opts = getSSHOptions(inventory, 'test');
 
-    assert.equal(opts.keySecretName, 'DEPLOY_SSH_KEY');
+    assert.equal(opts.keySecretName, 'SSH_PRIVATE_KEY');
   });
 
   it('should return jump host secret for acceptance', () => {
     const inventory = readInventory(FIXTURE_PATH);
     const opts = getSSHOptions(inventory, 'acceptance');
 
-    assert.equal(opts.keySecretName, 'DEPLOY_SSH_KEY');
+    assert.equal(opts.keySecretName, 'SSH_PRIVATE_KEY');
     assert.equal(opts.jumpHostSecret, 'JUMP_HOST');
   });
 

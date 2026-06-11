@@ -836,7 +836,7 @@ The `deploy-inventory.json` file defines your multi-server topology:
 
 ```json
 {
-  "ssh_key_secret": "DEPLOY_SSH_KEY",
+  "ssh_key_secret": "SSH_PRIVATE_KEY",
   "environments": {
     "test": {
       "access": "direct",
