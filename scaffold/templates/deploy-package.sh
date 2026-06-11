@@ -14,7 +14,7 @@ set -e
 #   ./deploy-package.sh user@server user@jump-host         # Deploy via jump host
 #
 # Environment Variables:
-#   DEPLOYMENT_DIR    Local build directory (default: ./deployment)
+#   DEPLOYMENT_DIR    Local build directory (default: ./build/deployment)
 #   DEPLOY_PATH       Remote deployment path (default: /opt/{{PROJECT_NAME}})
 #
 # Steps:
@@ -62,7 +62,10 @@ if [ -n "$JUMP_HOST" ]; then
 fi
 
 # ── Local Build Directory ────────────────────────────────────
-DEPLOYMENT_DIR="${DEPLOYMENT_DIR:-./deployment}"
+# Use a dedicated, git-ignored staging dir so the build never clobbers the
+# source ./deployment/ folder (scripts/deploy-cli.js, Dockerfile, nginx/),
+# which later workflow steps (upload, deploy-config, deploy) depend on.
+DEPLOYMENT_DIR="${DEPLOYMENT_DIR:-./build/deployment}"
 
 # Cleanup previous build artifacts
 rm -rf "${DEPLOYMENT_DIR}"
