@@ -470,7 +470,8 @@ Edit each `.env` with environment-specific values:
 
 ```bash
 # local_data/test/.env
-COMPOSE_PROJECT_NAME=my-app
+# Per-environment project name keeps envs isolated on a shared host.
+COMPOSE_PROJECT_NAME=my-app-test
 APP_REPLICAS=1
 ACTIVE_ENV=blue
 DEPLOY_ENV=test
@@ -904,6 +905,11 @@ variables.
 > **Per-environment Compose project name:** the generated release workflow sets
 > `COMPOSE_PROJECT_NAME` to `<project>-<deploy_target>` (e.g. `my-app-production`),
 > so environments deployed to the same host get isolated Docker Compose resources.
+> This matters because Compose namespaces **all** resources — containers,
+> networks, and volumes — by project name; a shared name across environments on
+> one host would collide (and could share the same database volume). The
+> generated `.env.example` default `COMPOSE_PROJECT_NAME=<project>-${DEPLOY_ENV}`
+> keeps manual `docker compose` runs isolated too.
 
 ---
 
