@@ -518,6 +518,80 @@ function buildConfigSecretsTable(answers) {
   return rows.join('\n');
 }
 
+/**
+ * Generate the infra-secrets.env.example content for a project.
+ *
+ * This is the declarative source of truth for the scalar / infrastructure
+ * GitHub secrets (SSH key, deploy path, host addresses, jump host, registry
+ * credentials). The operator copies it to `infra-secrets.env`, fills in real
+ * values, and runs `push-infra-secrets.sh` to push them all in one shot.
+ *
+ * The key set is topology/strategy-aware so the generated file matches the
+ * placeholders that actually appear in deploy-inventory.json:
+ *  - single  -> TEST_HOST/ACC_HOST/PROD_HOST (the ${VAR} hosts in the inventory)
+ *  - multi   -> no host vars (multi inventory uses literal IPs) + JUMP_HOST
+ *  - registry strategy -> REGISTRY_USER/REGISTRY_PASSWORD appended
+ *
+ * @param {object} answers - User answers
+ * @returns {string} Content for local_data/infra-secrets.env.example
+ */
+function buildInfraSecretsEnv(answers) {
+  const lower = answers.name.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
+  const lines = [];
+
+  lines.push('# =============================================================================');
+  lines.push(`# Infrastructure Secrets — ${answers.name}`);
+  lines.push('# =============================================================================');
+  lines.push('# Copy this file to `infra-secrets.env`, fill in real values, then push to');
+  lines.push('# GitHub Secrets:');
+  lines.push('#');
+  lines.push('#   cp local_data/infra-secrets.env.example local_data/infra-secrets.env');
+  lines.push('#   ./scripts/push-infra-secrets.sh --dry-run   # preview');
+  lines.push('#   ./scripts/push-infra-secrets.sh             # push for real');
+  lines.push('#');
+  lines.push('# Format: one KEY=VALUE per line. Comments (#) and blank lines are ignored.');
+  lines.push('# The `@path` prefix reads the value from a file (used for the SSH key, which');
+  lines.push('# is multiline and must never be inlined).');
+  lines.push('#');
+  lines.push('# This file (infra-secrets.env) lives under local_data/ and is GITIGNORED —');
+  lines.push('# it never gets committed. Only this .example template is safe to commit.');
+  lines.push('# =============================================================================');
+  lines.push('');
+  lines.push('# SSH private key for deployment (read from a file via the @ prefix).');
+  lines.push('# Generate a dedicated deploy key, then add deploy_key.pub to each server\'s');
+  lines.push('# ~/.ssh/authorized_keys:');
+  lines.push(`#   ssh-keygen -t ed25519 -C "deploy@${lower}" -f deploy_key -N ""`);
+  lines.push('SSH_PRIVATE_KEY=@deploy_key');
+  lines.push('');
+  lines.push('# Base deployment path on the remote servers (must be an absolute path).');
+  lines.push('DEPLOY_PATH=/opt/deployments');
+
+  if (answers.topology === 'single') {
+    // Single-server inventory uses ${TEST_HOST}/${ACC_HOST}/${PROD_HOST}.
+    lines.push('');
+    lines.push('# Host addresses — resolved into deploy-inventory.json\'s ${VAR} placeholders');
+    lines.push('# at deploy time, keeping real server addresses out of git.');
+    lines.push('TEST_HOST=10.0.1.30');
+    lines.push('ACC_HOST=10.0.2.10');
+    lines.push('PROD_HOST=10.0.3.10');
+  } else {
+    // Multi-server inventory ships with literal IPs the operator edits directly,
+    // and its acceptance environment uses jump_host access (jump_host_secret).
+    lines.push('');
+    lines.push('# Jump host for SSH proxying (the multi-server acceptance env uses it).');
+    lines.push('JUMP_HOST=user@bastion.example.com');
+  }
+
+  if (answers.strategy === 'registry') {
+    lines.push('');
+    lines.push('# Docker registry credentials (registry deployment strategy).');
+    lines.push('REGISTRY_USER=ci-deployer');
+    lines.push('REGISTRY_PASSWORD=change-me');
+  }
+
+  return lines.join('\n') + '\n';
+}
+
 // =============================================================================
 // File Writer (Task 9.2.1)
 // =============================================================================
@@ -578,6 +652,14 @@ function buildFileList(answers) {
   // --- Deploy package + push-secrets (always) ---
   add('deploy-package.sh', 'deploy-package.sh', true);
   add('scripts/push-secrets.sh', 'scripts/push-secrets.sh', true);
+  // push-infra-secrets.sh pushes the scalar/infra secrets (SSH key, hosts,
+  // deploy path, jump host, registry creds) declared in infra-secrets.env.
+  add('scripts/push-infra-secrets.sh', 'scripts/push-infra-secrets.sh', true);
+  // The .example template is generated with topology/strategy-aware keys; the
+  // operator copies it to local_data/infra-secrets.env (gitignored) and fills
+  // in real values before running push-infra-secrets.sh.
+  add('local_data/infra-secrets.env.example', 'local_data/infra-secrets.env.example');
+
 
   // --- Config files (always) ---
   add('deploy-config.json', 'deploy-config.json');
@@ -798,7 +880,11 @@ function generateAllFiles(answers, options) {
       content = generateDeployConfig(answers);
     } else if (file.src === 'deploy-inventory.json') {
       content = generateDeployInventory(answers);
+    } else if (file.src === 'local_data/infra-secrets.env.example') {
+      // Generated with topology/strategy-aware keys (see buildInfraSecretsEnv).
+      content = buildInfraSecretsEnv(answers);
     } else {
+
       // Read template and render with placeholder replacement
       const template = readTemplate(file.src);
       content = render(template, vars);
@@ -909,8 +995,14 @@ function printSummary(results, answers) {
   console.log('      ./scripts/push-secrets.sh production');
   console.log('');
   console.log('   4. Set infrastructure secrets in GitHub:');
-  console.log(`      See: .github/SECRETS-SETUP.md`);
+  console.log('      cp local_data/infra-secrets.env.example local_data/infra-secrets.env');
+  console.log('      ssh-keygen -t ed25519 -C "deploy@app" -f deploy_key -N ""');
+  console.log('      # Edit infra-secrets.env with real hosts/paths, add deploy_key.pub to servers');
+  console.log('      ./scripts/push-infra-secrets.sh --dry-run   # preview');
+  console.log('      ./scripts/push-infra-secrets.sh             # push');
+  console.log('      # Details: .github/SECRETS-SETUP.md');
   console.log('');
+
   console.log('   5. Build and verify locally:');
   console.log('      cd deployment && docker compose --profile all build');
   console.log('      docker compose --profile core --profile blue up -d');

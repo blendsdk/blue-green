@@ -13,6 +13,41 @@ These secrets are needed by ALL deployment workflows:
 | `JUMP_HOST` | Jump host for SSH proxying (if needed) | `user@bastion.example.com` |
 | `DEPLOY_PATH` | Base deployment path on remote servers | `/opt/deployments` |
 
+### How to set them — `push-infra-secrets.sh` (recommended)
+
+Don't click through the GitHub UI one secret at a time. The scaffold generates
+a declarative file + a helper script so you set every infrastructure secret in
+one idempotent command:
+
+```bash
+# 1. Copy the generated template (gitignored once filled in)
+cp local_data/infra-secrets.env.example local_data/infra-secrets.env
+
+# 2. Generate a dedicated deploy key (the @ prefix in the file points at it)
+ssh-keygen -t ed25519 -C "deploy@{{PROJECT_NAME_LOWER}}" -f deploy_key -N ""
+
+# 3. Edit local_data/infra-secrets.env — real host addresses, deploy path, etc.
+
+# 4. Preview, then push to GitHub Secrets
+./scripts/push-infra-secrets.sh --dry-run
+./scripts/push-infra-secrets.sh
+```
+
+`infra-secrets.env` is just `KEY=VALUE` lines. The `@path` convention reads a
+value from a file (used for the multiline SSH key: `SSH_PRIVATE_KEY=@deploy_key`).
+The script preflight-checks `gh` auth, warns about any `${VAR}` placeholder in
+`deploy-inventory.json` / `deploy-config.json` that you forgot to set, and prints
+the resulting `gh secret list`. Re-run it any time a host address changes — it's
+idempotent.
+
+> **Two push scripts, two kinds of secrets:**
+> - `push-infra-secrets.sh` → scalar secrets (SSH key, hosts, deploy path, jump host, registry creds)
+> - `push-secrets.sh` → per-environment **config files** (see below)
+
+> **Manual alternative:** You can still set these by hand in
+> **Settings → Secrets and variables → Actions** if you prefer.
+
+
 ### Host Secrets (`${VAR}` placeholders)
 
 `deploy-inventory.json` and `deploy-config.json` support `${VAR}` placeholders
